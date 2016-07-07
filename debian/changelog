@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.7-0ubuntu4) yakkety; urgency=medium
+
+  * Set PATH in cron.d job to fix monthly scrubs. (LP: #1548009)
+
+ -- Richard Laager <rlaager@wiktel.com>  Wed, 06 Jul 2016 22:37:47 -0500
+
 zfs-linux (0.6.5.7-0ubuntu3) yakkety; urgency=medium
 
   * Drop the Recommends: on zfs-dkms; technically correct but it confuses
