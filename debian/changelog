@@ -1,3 +1,13 @@
+zfs-linux (0.6.5.6-0ubuntu12) xenial; urgency=medium
+
+  * Change to include some important tools in zfsutils-linux build.  
+  - Add tools : arcstat.py, arc_summary.py & dbufstat.py in /usr/sbin.
+  - Change utilities path (bindir) to /usr/sbin per
+    https://bugs.launchpad.net/ubuntu/+source/zfs-linux/+bug/1574342/comments/6
+  - Add python related dependencies (LP: #1574342) 
+
+ -- Eric Desrochers <eric.desrochers@canonical.com>  Thu, 28 Jul 2016 16:18:16 -0400
+
 zfs-linux (0.6.5.6-0ubuntu11) xenial; urgency=medium
 
   [ Richard Laager ]
