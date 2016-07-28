@@ -15,6 +15,8 @@ Build-Depends: autotools-dev,
  libtool,
  uuid-dev,
  zlib1g-dev,
+ python,
+ dh-python,
  libblkid-dev,
  libattr1-dev
 Standards-Version: 3.9.8
@@ -185,7 +187,7 @@ Description: Debugging symbols for zfs-zed
 Package: zfsutils-linux
 Section: admin
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}
+Depends: ${misc:Depends}, ${shlibs:Depends}, ${python2:Depends}, python
 Recommends: zfs-zed
 Suggests: samba-common-bin (>= 3.0.23), nfs-kernel-server, zfs-initramfs
 Conflicts: zfs, zfs-fuse
