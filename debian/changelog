@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.6-0ubuntu11) xenial; urgency=medium
+
+  [ Richard Laager ]
+  * Set PATH in cron.d job to fix monthly scrubs. (LP: #1548009)
+
+ -- Michael Terry <mterry@ubuntu.com>  Thu, 28 Jul 2016 10:18:25 -0400
+
 zfs-linux (0.6.5.6-0ubuntu10) xenial; urgency=medium
 
   * Sync with relevant upstream fixes (LP: #1594871)
