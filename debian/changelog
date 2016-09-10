@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.8-0ubuntu1) yakkety; urgency=medium
+
+  * Sync with upstream 0.6.5.8 release
+
+ -- Colin Ian King <colin.king@canonical.com>  Sat, 10 Sep 2016 16:00:01 +0100
+
 zfs-linux (0.6.5.7-0ubuntu5) yakkety; urgency=medium
 
   * Change to include some important tools in zfsutils-linux build.  
