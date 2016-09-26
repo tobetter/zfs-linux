@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.8-0ubuntu2) yakkety; urgency=medium
+
+  * Use python3 for arcstat.py, arc_summary.py & dbufstat.py (LP: #1627909)
+    - update dependency to python3 and set paths to use python3
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 26 Sep 2016 18:49:12 -0500
+
 zfs-linux (0.6.5.8-0ubuntu1) yakkety; urgency=medium
 
   * Sync with upstream 0.6.5.8 release
