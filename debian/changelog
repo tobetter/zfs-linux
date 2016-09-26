@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.6-0ubuntu13) xenial; urgency=medium
+
+  * Use python3 for arcstat.py, arc_summary.py & dbufstat.py (LP: #1627909)
+    - update dependency to python3 and set paths to use python3
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 26 Sep 2016 07:35:44 -0500
+
 zfs-linux (0.6.5.6-0ubuntu12) xenial; urgency=medium
 
   * Change to include some important tools in zfsutils-linux build.  
