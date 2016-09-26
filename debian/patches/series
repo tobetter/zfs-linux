@@ -15,3 +15,4 @@ enable-zed.patch
 1009-Use-udev-for-partition-detection.patch
 1010-Enable-PF_FSTRANS-for-ioctl-secpolicy-callbacks-4571.patch
 1011-Fix-ztest-truncated-cache-file.patch
+1012-cmd-python-exec-path.patch
