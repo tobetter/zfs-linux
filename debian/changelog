@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.8-0ubuntu3) yakkety; urgency=medium
+
+  [ Eric Desrochers ] 
+  * Fix zfs services to fail on first boot due to zfs services starting up
+    before /etc/mtab has a chance to be symlinked to /proc/mounts. (LP: #1607920)
+    (upstream commit 792517389fad5c495a2738b61c2e9c65dedaaa9a)
+
+ -- Eric Desrochers <eric.desrochers@canonical.com>  Thu, 29 Sep 2016 16:13:38 +0200
+
 zfs-linux (0.6.5.8-0ubuntu2) yakkety; urgency=medium
 
   * Use python3 for arcstat.py, arc_summary.py & dbufstat.py (LP: #1627909)
