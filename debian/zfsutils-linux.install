@@ -3,9 +3,9 @@ contrib/bash_completion.d/zfs   /usr/share/bash-completion/completions/
 sbin
 lib/udev
 debian/zfs.target /lib/systemd/system
-usr/sbin/arc_summary.py
-usr/sbin/arcstat.py
-usr/sbin/dbufstat.py
+usr/sbin/arc_summary
+usr/sbin/arcstat
+usr/sbin/dbufstat
 usr/share/man/man1
 usr/share/man/man5
 usr/share/man/man8/fsck.zfs.8
