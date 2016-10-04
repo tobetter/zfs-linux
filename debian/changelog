@@ -1,3 +1,15 @@
+zfs-linux (0.6.5.6-0ubuntu14) xenial; urgency=medium
+
+  * Fix zfs services to fail on first boot due to zfs services starting up
+    before /etc/mtab has a chance to be symlinked to /proc/mounts. (LP: #1607920)
+    (upstream commit 792517389fad5c495a2738b61c2e9c65dedaaa9a)
+
+  * Symlink utilities in /usr/sbin to remove suffix as per policy 10.4 Scripts  (LP: #1628279)
+    Users can rely on the new names, but relying on the old names won't break before
+    release upgrade.
+
+ -- Eric Desrochers <eric.desrochers@canonical.com>  Tue, 04 Oct 2016 15:07:52 +0200
+
 zfs-linux (0.6.5.6-0ubuntu13) xenial; urgency=medium
 
   * Use python3 for arcstat.py, arc_summary.py & dbufstat.py (LP: #1627909)
