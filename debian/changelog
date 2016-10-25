@@ -1,3 +1,15 @@
+zfs-linux (0.6.5.8-0ubuntu5) zesty; urgency=low
+
+  * Fix zpool import with vdev on zvol hang (LP: #1636517)
+    kernel commit 77adfdaff1901ced4f72496e61317779424ee653
+    ("block_dev: Support checking inode permissions in lookup_bdev()")
+    added a flags argument to block_dev which caused this breakage. Add
+    detection of 1 or 2 arg block_dev and add a zfs_block_dev shim to
+    abstract these differences away. Kudos to Fabian Grünbichler for
+    the original fix that this fix is based on.
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 25 Oct 2016 16:58:11 +0100
+
 zfs-linux (0.6.5.8-0ubuntu4) yakkety; urgency=low
 
   [Richard Laager]
