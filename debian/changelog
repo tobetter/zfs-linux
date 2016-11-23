@@ -1,3 +1,21 @@
+zfs-linux (0.6.5.8-0ubuntu8) zesty; urgency=medium
+
+  * Linux 4.9 compatibility
+    Fix backport of ('Linux 4.9 compat: iops->rename() wants flags'). Causes
+    FTBS with Linux v4.9.
+
+ -- Tim Gardner <tim.gardner@canonical.com>  Wed, 23 Nov 2016 10:06:55 -0700
+
+zfs-linux (0.6.5.8-0ubuntu7) zesty; urgency=medium
+
+  * Linux 4.9 compatibility
+    back ported from commit b8d9e26440ade0edebfa98af8cb9371810c1aeaf ('Linux 4.9 compat: iops->rename() wants flags')
+    cherry picked from commit 0fedeedd309eca62d15fffd8bd811e2b12660e21 ('Linux 4.9 compat: remove iops->{set,get,remove}xattr')
+    cherry picked from commit 3b0ba3ba99b8a3af0fb532bf264629436b1abd84 ('Linux 4.9 compat: inode_change_ok() renamed setattr_prepare()')
+    cherry picked from commit 7ca25051b6470e8471b4ed454d8c66ff21338de3 ('Kernel 4.9 compat: file_operations->aio_fsync removal')
+
+ -- Tim Gardner <tim.gardner@canonical.com>  Wed, 23 Nov 2016 08:39:27 -0700
+
 zfs-linux (0.6.5.8-0ubuntu5) zesty; urgency=low
 
   * Fix zpool import with vdev on zvol hang (LP: #1636517)
