@@ -662,7 +662,11 @@ const struct inode_operations zpl_inode_operations = {
 	.mkdir		= zpl_mkdir,
 	.rmdir		= zpl_rmdir,
 	.mknod		= zpl_mknod,
+#ifdef HAVE_RENAME_WANTS_FLAGS
+	.rename		= zpl_rename2,
+#else
 	.rename		= zpl_rename,
+#endif
 	.setattr	= zpl_setattr,
 	.getattr	= zpl_getattr,
 #ifdef HAVE_GENERIC_SETXATTR
