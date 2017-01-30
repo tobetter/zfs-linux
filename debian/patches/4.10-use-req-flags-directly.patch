@@ -1,0 +1,69 @@
+Index: zfs-linux-0.6.5.8/module/zfs/vdev_disk.c
+===================================================================
+--- zfs-linux-0.6.5.8.orig/module/zfs/vdev_disk.c
++++ zfs-linux-0.6.5.8/module/zfs/vdev_disk.c
+@@ -724,18 +724,24 @@ vdev_disk_io_start(zio_t *zio)
+ 		return;
+ 	case ZIO_TYPE_WRITE:
+ 		rw = WRITE;
+-		if ((pri == ZIO_PRIORITY_SYNC_WRITE) && (v->vdev_nonrot))
++		if ((pri == ZIO_PRIORITY_SYNC_WRITE) && (v->vdev_nonrot)) {
++#ifdef USE_REQ_FLAGS
++			flags = REQ_SYNC;
++#else
+ 			flags = WRITE_SYNC;
+-		else
++#endif
++		} else {
+ 			flags = 0;
++		}
+ 		break;
+ 
+ 	case ZIO_TYPE_READ:
+ 		rw = READ;
++		flags = 0;
++#ifndef USE_REQ_FLAGS
+ 		if ((pri == ZIO_PRIORITY_SYNC_READ) && (v->vdev_nonrot))
+ 			flags = READ_SYNC;
+-		else
+-			flags = 0;
++#endif
+ 		break;
+ 
+ 	default:
+Index: zfs-linux-0.6.5.8/config/kernel.m4
+===================================================================
+--- zfs-linux-0.6.5.8.orig/config/kernel.m4
++++ zfs-linux-0.6.5.8/config/kernel.m4
+@@ -104,6 +104,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_GENERIC_IO_ACCT
+ 	ZFS_AC_KERNEL_RENAME_WANTS_FLAGS
+ 	ZFS_AC_KERNEL_HAVE_GENERIC_SETXATTR
++	ZFS_AC_KERNEL_USE_REQ_FLAGS
+ 
+ 	AS_IF([test "$LINUX_OBJ" != "$LINUX"], [
+ 		KERNELMAKE_PARAMS="$KERNELMAKE_PARAMS O=$LINUX_OBJ"
+Index: zfs-linux-0.6.5.8/config/kernel-req-flags.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.8/config/kernel-req-flags.m4
+@@ -0,0 +1,19 @@
++dnl #
++dnl # 4.10 API
++dnl #
++dnl # The WRITE_* and READ_SYNC wrappers have been removed, and
++dnl # REQ_* flags should be used directly.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_USE_REQ_FLAGS], [
++	AC_MSG_CHECKING([whether fops->aio_fsync() exists])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/fs.h>
++	],[
++		unsigned int flags __attribute__ ((unused)) = READ_SYNC;
++	],[
++		AC_MSG_RESULT(no)
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(USE_REQ_FLAGS, 1, [use REQ_* flags directly])
++	])
++])

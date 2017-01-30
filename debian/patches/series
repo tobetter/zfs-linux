@@ -12,3 +12,5 @@ enable-zed.patch
 0003-Linux-4.9-compat-inode_change_ok-renamed-setattr_pre.patch
 0004-Kernel-4.9-compat-file_operations-aio_fsync-removal.patch
 0001-Fix-for-Linux-4.9-compat-iops-rename-wants-flags.patch
+0001-4.10-compat-BIO-flag-changes-and-others.patch
+4.10-use-req-flags-directly.patch

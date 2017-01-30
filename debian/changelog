@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.8-0ubuntu9) zesty; urgency=medium
+
+  * Linux 4.10 compatibility
+    - Backported upstream commit a5e046eaacad20487188c9eef231554e1401d8c9
+      ('4.10 compat - BIO flag changes and others').
+    - Replace uses of READ_* and WRITE_* to use REQ_* flags directly.
+
+ -- Seth Forshee <seth.forshee@canonical.com>  Mon, 30 Jan 2017 09:41:24 -0600
+
 zfs-linux (0.6.5.8-0ubuntu8) zesty; urgency=medium
 
   * Linux 4.9 compatibility
