@@ -724,18 +724,24 @@ vdev_disk_io_start(zio_t *zio)
 		return;
 	case ZIO_TYPE_WRITE:
 		rw = WRITE;
-		if ((pri == ZIO_PRIORITY_SYNC_WRITE) && (v->vdev_nonrot))
+		if ((pri == ZIO_PRIORITY_SYNC_WRITE) && (v->vdev_nonrot)) {
+#ifdef USE_REQ_FLAGS
+			flags = REQ_SYNC;
+#else
 			flags = WRITE_SYNC;
-		else
+#endif
+		} else {
 			flags = 0;
+		}
 		break;
 
 	case ZIO_TYPE_READ:
 		rw = READ;
+		flags = 0;
+#ifndef USE_REQ_FLAGS
 		if ((pri == ZIO_PRIORITY_SYNC_READ) && (v->vdev_nonrot))
 			flags = READ_SYNC;
-		else
-			flags = 0;
+#endif
 		break;
 
 	default:
