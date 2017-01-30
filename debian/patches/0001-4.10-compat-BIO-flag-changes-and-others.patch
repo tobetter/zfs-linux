@@ -1,0 +1,249 @@
+From a5e046eaacad20487188c9eef231554e1401d8c9 Mon Sep 17 00:00:00 2001
+From: Tim Chase <tim@chase2k.com>
+Date: Fri, 30 Dec 2016 16:03:59 -0600
+Subject: [PATCH] 4.10 compat - BIO flag changes and others
+
+[bio] The req_op enum was changed to req_opf.  Update the "Linux 4.8 API"
+autotools checks to use an int to determine whether the various REQ_OP
+values are defined.  This should work properly on kernels >= 4.8.
+
+[bio] bio_set_op_attrs() is now an inline function and can't be detected
+with #ifdef.  Add a configure check to determine whether bio_set_op_attrs()
+is defined.  Move the local definition of it from vdev_disk.c to
+blkdev_compat.h for consistency with other related compability shims.
+
+[bio] The read/write flags and their modifiers, including WRITE_FLUSH,
+WRITE_FUA and WRITE_FLUSH_FUA have been removed from fs.h.  Add the new
+bio_set_flush() compatibility wrapper to replace VDEV_WRITE_FLUSH_FUA
+and set the flags appropriately for each supported kernel version.
+
+[vfs] The generic_readlink() function has been made static.  If .readlink
+in inode_operations is NULL, generic_readlink() is used.
+
+[zol typo] Completely unrelated to 4.10 compat, fix a typo in the check
+for REQ_OP_SECURE_ERASE so that the proper macro is defined:
+
+    s/HAVE_REQ_OP_SECURE_DISCARD/HAVE_REQ_OP_SECURE_ERASE/
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Reviewed-by: Chunwei Chen <david.chen@osnexus.com>
+Signed-off-by: Tim Chase <tim@chase2k.com>
+Closes #5499
+---
+ config/kernel-bio-op.m4           | 25 ++++++++++++++---
+ config/kernel-generic_readlink.m4 | 22 +++++++++++++++
+ config/kernel.m4                  |  2 ++
+ include/linux/blkdev_compat.h     | 57 ++++++++++++++++++++++++++++++++-------
+ module/zfs/vdev_disk.c            |  7 +----
+ module/zfs/zpl_inode.c            |  2 ++
+ 6 files changed, 96 insertions(+), 19 deletions(-)
+ create mode 100644 config/kernel-generic_readlink.m4
+
+Index: zfs-linux-0.6.5.8/config/kernel-bio-op.m4
+===================================================================
+--- zfs-linux-0.6.5.8.orig/config/kernel-bio-op.m4
++++ zfs-linux-0.6.5.8/config/kernel-bio-op.m4
+@@ -10,7 +10,7 @@ AC_DEFUN([ZFS_AC_KERNEL_REQ_OP_DISCARD],
+ 	ZFS_LINUX_TRY_COMPILE([
+ 		#include <linux/blk_types.h>
+ 	],[
+-		enum req_op op __attribute__ ((unused)) = REQ_OP_DISCARD;
++		int op __attribute__ ((unused)) = REQ_OP_DISCARD;
+ 	],[
+ 		AC_MSG_RESULT(yes)
+ 		AC_DEFINE(HAVE_REQ_OP_DISCARD, 1,
+@@ -25,10 +25,10 @@ AC_DEFUN([ZFS_AC_KERNEL_REQ_OP_SECURE_ER
+ 	ZFS_LINUX_TRY_COMPILE([
+ 		#include <linux/blk_types.h>
+ 	],[
+-		enum req_op op __attribute__ ((unused)) = REQ_OP_SECURE_ERASE;
++		int op __attribute__ ((unused)) = REQ_OP_SECURE_ERASE;
+ 	],[
+ 		AC_MSG_RESULT(yes)
+-		AC_DEFINE(HAVE_REQ_OP_SECURE_DISCARD, 1,
++		AC_DEFINE(HAVE_REQ_OP_SECURE_ERASE, 1,
+ 		    [REQ_OP_SECURE_ERASE is defined])
+ 	],[
+ 		AC_MSG_RESULT(no)
+@@ -41,7 +41,7 @@ AC_DEFUN([ZFS_AC_KERNEL_REQ_OP_FLUSH], [
+ 	ZFS_LINUX_TRY_COMPILE([
+ 		#include <linux/blk_types.h>
+ 	],[
+-		enum req_op op __attribute__ ((unused)) = REQ_OP_FLUSH;
++		int op __attribute__ ((unused)) = REQ_OP_FLUSH;
+ 	],[
+ 		AC_MSG_RESULT(yes)
+ 		AC_DEFINE(HAVE_REQ_OP_FLUSH, 1,
+@@ -64,4 +64,21 @@ AC_DEFUN([ZFS_AC_KERNEL_BIO_BI_OPF], [
+ 	],[
+ 		AC_MSG_RESULT(no)
+ 	])
++])
++
++AC_DEFUN([ZFS_AC_KERNEL_HAVE_BIO_SET_OP_ATTRS], [
++	AC_MSG_CHECKING([whether bio_set_op_attrs is available])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/blk_types.h>
++	],[
++		struct bio *bio __attribute__ ((unused)) = NULL;
++
++		bio_set_op_attrs(bio, 0, 0);
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_BIO_SET_OP_ATTRS, 1,
++		    [bio_set_op_attrs is available])
++	],[
++		AC_MSG_RESULT(no)
++	])
+ ])
+Index: zfs-linux-0.6.5.8/config/kernel-generic_readlink.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.8/config/kernel-generic_readlink.m4
+@@ -0,0 +1,22 @@
++dnl #
++dnl # 4.10 API
++dnl #
++dnl # NULL inode_operations.readlink implies generic_readlink(), which
++dnl # has been made static.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_GENERIC_READLINK_GLOBAL], [
++	AC_MSG_CHECKING([whether generic_readlink is global])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/fs.h>
++	],[
++		int i __attribute__ ((unused));
++
++		i = generic_readlink(NULL, NULL, 0);
++	],[
++		AC_MSG_RESULT([yes])
++		AC_DEFINE(HAVE_GENERIC_READLINK, 1,
++		          [generic_readlink is global])
++	],[
++		AC_MSG_RESULT([no])
++	])
++])
+Index: zfs-linux-0.6.5.8/config/kernel.m4
+===================================================================
+--- zfs-linux-0.6.5.8.orig/config/kernel.m4
++++ zfs-linux-0.6.5.8/config/kernel.m4
+@@ -35,6 +35,8 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_BLK_QUEUE_MAX_SEGMENTS
+ 	ZFS_AC_KERNEL_GET_DISK_RO
+ 	ZFS_AC_KERNEL_GET_GENDISK
++	ZFS_AC_KERNEL_HAVE_BIO_SET_OP_ATTRS
++	ZFS_AC_KERNEL_GENERIC_READLINK_GLOBAL
+ 	ZFS_AC_KERNEL_DISCARD_GRANULARITY
+ 	ZFS_AC_KERNEL_CONST_XATTR_HANDLER
+ 	ZFS_AC_KERNEL_XATTR_HANDLER_NAME
+Index: zfs-linux-0.6.5.8/include/linux/blkdev_compat.h
+===================================================================
+--- zfs-linux-0.6.5.8.orig/include/linux/blkdev_compat.h
++++ zfs-linux-0.6.5.8/include/linux/blkdev_compat.h
+@@ -300,19 +300,58 @@ bio_set_flags_failfast(struct block_devi
+ #endif /* HAVE_BDEV_LOGICAL_BLOCK_SIZE */
+ #endif /* HAVE_BDEV_PHYSICAL_BLOCK_SIZE */
+ 
++#ifndef HAVE_BIO_SET_OP_ATTRS
+ /*
+- * 2.6.37 API change
+- * The WRITE_FLUSH, WRITE_FUA, and WRITE_FLUSH_FUA flags have been
+- * introduced as a replacement for WRITE_BARRIER.  This was done to
+- * allow richer semantics to be expressed to the block layer.  It is
+- * the block layers responsibility to choose the correct way to
+- * implement these semantics.
++ * Kernels without bio_set_op_attrs use bi_rw for the bio flags.
+  */
+-#ifdef WRITE_FLUSH_FUA
+-#define	VDEV_WRITE_FLUSH_FUA		WRITE_FLUSH_FUA
++static inline void
++bio_set_op_attrs(struct bio *bio, unsigned rw, unsigned flags)
++{
++	bio->bi_rw |= rw | flags;
++}
++#endif
++
++/*
++ * bio_set_flush - Set the appropriate flags in a bio to guarantee
++ * data are on non-volatile media on completion.
++ *
++ * 2.6.X - 2.6.36 API,
++ *   WRITE_BARRIER - Tells the block layer to commit all previously submitted
++ *   writes to stable storage before this one is started and that the current
++ *   write is on stable storage upon completion.  Also prevents reordering
++ *   on both sides of the current operation.
++ *
++ * 2.6.37 - 4.8 API,
++ *   Introduce  WRITE_FLUSH, WRITE_FUA, and WRITE_FLUSH_FUA flags as a
++ *   replacement for WRITE_BARRIER to allow expressing richer semantics
++ *   to the block layer.  It's up to the block layer to implement the
++ *   semantics correctly. Use the WRITE_FLUSH_FUA flag combination.
++ *
++ * 4.8 - 4.9 API,
++ *   REQ_FLUSH was renamed to REQ_PREFLUSH.  For consistency with previous
++ *   ZoL releases, prefer the WRITE_FLUSH_FUA flag set if it's available.
++ *
++ * 4.10 API,
++ *   The read/write flags and their modifiers, including WRITE_FLUSH,
++ *   WRITE_FUA and WRITE_FLUSH_FUA were removed from fs.h in
++ *   torvalds/linux@70fd7614 and replaced by direct flag modification
++ *   of the REQ_ flags in bio->bi_opf.  Use REQ_PREFLUSH.
++ */
++static inline void
++bio_set_flush(struct bio *bio)
++{
++#if defined(WRITE_BARRIER)	/* < 2.6.37 */
++	bio_set_op_attrs(bio, 0, WRITE_BARRIER);
++#elif defined(WRITE_FLUSH_FUA)	/* >= 2.6.37 and <= 4.9 */
++	bio_set_op_attrs(bio, 0, WRITE_FLUSH_FUA);
++#elif defined(REQ_PREFLUSH)	/* >= 4.10 */
++	bio_set_op_attrs(bio, 0, REQ_PREFLUSH);
+ #else
+-#define	VDEV_WRITE_FLUSH_FUA		WRITE_BARRIER
++#error	"Allowing the build will cause bio_set_flush requests to be ignored."
++	"Please file an issue report at: "
++	"https://github.com/zfsonlinux/zfs/issues/new"
+ #endif
++}
+ 
+ /*
+  * 4.8 - 4.x API,
+Index: zfs-linux-0.6.5.8/module/zfs/vdev_disk.c
+===================================================================
+--- zfs-linux-0.6.5.8.orig/module/zfs/vdev_disk.c
++++ zfs-linux-0.6.5.8/module/zfs/vdev_disk.c
+@@ -494,11 +494,6 @@ bio_map(struct bio *bio, void *bio_ptr,
+ 	return (bio_size);
+ }
+ 
+-#ifndef bio_set_op_attrs
+-#define	bio_set_op_attrs(bio, rw, flags) \
+-	do { (bio)->bi_rw |= (rw)|(flags); } while (0)
+-#endif
+-
+ static inline void
+ vdev_submit_bio_impl(struct bio *bio)
+ {
+@@ -676,7 +671,7 @@ vdev_disk_io_flush(struct block_device *
+ 	bio->bi_private = zio;
+ 	bio->bi_bdev = bdev;
+ 	zio->io_delay = jiffies_64;
+-	bio_set_op_attrs(bio, 0, VDEV_WRITE_FLUSH_FUA);
++	bio_set_flush(bio);
+ 	vdev_submit_bio(bio);
+ 	invalidate_bdev(bdev);
+ 
+Index: zfs-linux-0.6.5.8/module/zfs/zpl_inode.c
+===================================================================
+--- zfs-linux-0.6.5.8.orig/module/zfs/zpl_inode.c
++++ zfs-linux-0.6.5.8/module/zfs/zpl_inode.c
+@@ -726,7 +726,9 @@ const struct inode_operations zpl_dir_in
+ };
+ 
+ const struct inode_operations zpl_symlink_inode_operations = {
++#ifdef HAVE_GENERIC_READLINK
+ 	.readlink	= generic_readlink,
++#endif
+ #if defined(HAVE_GET_LINK_DELAYED) || defined(HAVE_GET_LINK_COOKIE)
+ 	.get_link	= zpl_get_link,
+ #elif defined(HAVE_FOLLOW_LINK_COOKIE) || defined(HAVE_FOLLOW_LINK_NAMEIDATA)
