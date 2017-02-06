@@ -77,7 +77,10 @@ static const option_map_t option_map[] = {
 	{ MNTOPT_RELATIME,	MS_RELATIME,	ZS_COMMENT	},
 #endif
 #ifdef MS_STRICTATIME
-	{ MNTOPT_DFRATIME,	MS_STRICTATIME,	ZS_COMMENT	},
+	{ MNTOPT_STRICTATIME,	MS_STRICTATIME,	ZS_COMMENT	},
+#endif
+#ifdef MS_LAZYTIME
+	{ MNTOPT_LAZYTIME,	MS_LAZYTIME,	ZS_COMMENT	},
 #endif
 	{ MNTOPT_CONTEXT,	MS_COMMENT,	ZS_COMMENT	},
 	{ MNTOPT_FSCONTEXT,	MS_COMMENT,	ZS_COMMENT	},
@@ -292,11 +295,11 @@ mtab_is_writeable(void)
 	struct stat st;
 	int error, fd;
 
-	error = lstat(MNTTAB, &st);
+	error = lstat("/etc/mtab", &st);
 	if (error || S_ISLNK(st.st_mode))
 		return (0);
 
-	fd = open(MNTTAB, O_RDWR | O_CREAT, 0644);
+	fd = open("/etc/mtab", O_RDWR | O_CREAT, 0644);
 	if (fd < 0)
 		return (0);
 
@@ -318,21 +321,21 @@ mtab_update(char *dataset, char *mntpoint, char *type, char *mntopts)
 	mnt.mnt_freq = 0;
 	mnt.mnt_passno = 0;
 
-	fp = setmntent(MNTTAB, "a+");
+	fp = setmntent("/etc/mtab", "a+");
 	if (!fp) {
 		(void) fprintf(stderr, gettext(
-		    "filesystem '%s' was mounted, but %s "
+		    "filesystem '%s' was mounted, but /etc/mtab "
 		    "could not be opened due to error %d\n"),
-		    dataset, MNTTAB, errno);
+		    dataset, errno);
 		return (MOUNT_FILEIO);
 	}
 
 	error = addmntent(fp, &mnt);
 	if (error) {
 		(void) fprintf(stderr, gettext(
-		    "filesystem '%s' was mounted, but %s "
+		    "filesystem '%s' was mounted, but /etc/mtab "
 		    "could not be updated due to error %d\n"),
-		    dataset, MNTTAB, errno);
+		    dataset, errno);
 		return (MOUNT_FILEIO);
 	}
 
