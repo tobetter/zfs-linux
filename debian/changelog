@@ -1,3 +1,11 @@
+zfs-linux (0.6.5.8-0ubuntu4.2) yakkety; urgency=low
+
+  * Enable zfs to respect RSIZE_LIMIT limits (LP: #1656259)
+    backport of upstream commit 933ec999511f3d29de005bfa8966ae007b161c0f
+    ("Retire .write/.read file operations")
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 17 Feb 2017 11:00:12 +0000
+
 zfs-linux (0.6.5.8-0ubuntu4.1) yakkety; urgency=low
 
   * Fix zpool import with vdev on zvol hang (LP: #1636517)
