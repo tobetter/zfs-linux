@@ -18,3 +18,5 @@ enable-zed.patch
 1012-cmd-python-exec-path.patch
 1013-Fix-dev-zfs-device-is-missing.patch
 1014-kernel-lookup-bdev.patch
+1015-Linux-4.8-compat-posix_acl_valid.patch
+1016-Retire-.write-.read-file-operations.patch
