@@ -1,0 +1,117 @@
+From 4b908d32200b6e5c7b5115322b6c8d25e770daa0 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Tue, 2 Aug 2016 11:11:45 -0700
+Subject: [PATCH] Linux 4.8 compat: posix_acl_valid()
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+The posix_acl_valid() function has been updated to require a
+user namespace.  Filesystem callers should normally provide the
+user_ns from the super block associcated with the ACL; the
+zpl_posix_acl_valid() wrapper has been added for this purpose.
+See https://github.com/torvalds/linux/commit/0d4d717f for
+complete details.
+
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Nikolay Borisov <n.borisov.lkml@gmail.com>
+Signed-off-by: Chunwei Chen <david.chen@osnexus.com>
+Closes #4922
+---
+ config/kernel-acl.m4       | 24 ++++++++++++++++++++++++
+ config/kernel.m4           |  1 +
+ include/linux/vfs_compat.h | 12 ++++++++++++
+ module/zfs/zpl_xattr.c     |  4 ++--
+ 4 files changed, 39 insertions(+), 2 deletions(-)
+
+Index: zfs-linux-0.6.5.6/config/kernel-acl.m4
+===================================================================
+--- zfs-linux-0.6.5.6.orig/config/kernel-acl.m4
++++ zfs-linux-0.6.5.6/config/kernel-acl.m4
+@@ -118,6 +118,30 @@ AC_DEFUN([ZFS_AC_KERNEL_POSIX_ACL_EQUIV_
+ ])
+ 
+ dnl #
++dnl # 4.8 API change,
++dnl # The function posix_acl_valid now must be passed a namespace.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_POSIX_ACL_VALID_WITH_NS], [
++	AC_MSG_CHECKING([whether posix_acl_valid() wants user namespace])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/fs.h>
++		#include <linux/posix_acl.h>
++	],[
++		struct user_namespace *user_ns = NULL;
++		const struct posix_acl *acl = NULL;
++		int error;
++
++		error = posix_acl_valid(user_ns, acl);
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_POSIX_ACL_VALID_WITH_NS, 1,
++		    [posix_acl_valid() wants user namespace])
++	],[
++		AC_MSG_RESULT(no)
++	])
++])
++
++dnl #
+ dnl # 2.6.27 API change,
+ dnl # Check if inode_operations contains the function permission
+ dnl # and expects the nameidata structure to have been removed.
+Index: zfs-linux-0.6.5.6/config/kernel.m4
+===================================================================
+--- zfs-linux-0.6.5.6.orig/config/kernel.m4
++++ zfs-linux-0.6.5.6/config/kernel.m4
+@@ -41,6 +41,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_POSIX_ACL_CHMOD
+ 	ZFS_AC_KERNEL_POSIX_ACL_CACHING
+ 	ZFS_AC_KERNEL_POSIX_ACL_EQUIV_MODE_WANTS_UMODE_T
++	ZFS_AC_KERNEL_POSIX_ACL_VALID_WITH_NS
+ 	ZFS_AC_KERNEL_INODE_OPERATIONS_PERMISSION
+ 	ZFS_AC_KERNEL_INODE_OPERATIONS_PERMISSION_WITH_NAMEIDATA
+ 	ZFS_AC_KERNEL_INODE_OPERATIONS_CHECK_ACL
+Index: zfs-linux-0.6.5.6/include/linux/vfs_compat.h
+===================================================================
+--- zfs-linux-0.6.5.6.orig/include/linux/vfs_compat.h
++++ zfs-linux-0.6.5.6/include/linux/vfs_compat.h
+@@ -320,6 +320,18 @@ typedef umode_t zpl_equivmode_t;
+ #else
+ typedef mode_t zpl_equivmode_t;
+ #endif /* HAVE_POSIX_ACL_EQUIV_MODE_UMODE_T */
++
++/*
++ * 4.8 API change,
++ * posix_acl_valid() now must be passed a namespace, the namespace from
++ * from super block associated with the given inode is used for this purpose.
++ */
++#ifdef HAVE_POSIX_ACL_VALID_WITH_NS
++#define	zpl_posix_acl_valid(ip, acl)  posix_acl_valid(ip->i_sb->s_user_ns, acl)
++#else
++#define	zpl_posix_acl_valid(ip, acl)  posix_acl_valid(acl)
++#endif
++
+ #endif /* CONFIG_FS_POSIX_ACL */
+ 
+ #ifndef HAVE_CURRENT_UMASK
+Index: zfs-linux-0.6.5.6/module/zfs/zpl_xattr.c
+===================================================================
+--- zfs-linux-0.6.5.6.orig/module/zfs/zpl_xattr.c
++++ zfs-linux-0.6.5.6/module/zfs/zpl_xattr.c
+@@ -1281,7 +1281,7 @@ __zpl_xattr_acl_set_access(struct inode
+ 		if (IS_ERR(acl))
+ 			return (PTR_ERR(acl));
+ 		else if (acl) {
+-			error = posix_acl_valid(acl);
++			error = zpl_posix_acl_valid(ip, acl);
+ 			if (error) {
+ 				zpl_posix_acl_release(acl);
+ 				return (error);
+@@ -1320,7 +1320,7 @@ __zpl_xattr_acl_set_default(struct inode
+ 		if (IS_ERR(acl))
+ 			return (PTR_ERR(acl));
+ 		else if (acl) {
+-			error = posix_acl_valid(acl);
++			error = zpl_posix_acl_valid(ip, acl);
+ 			if (error) {
+ 				zpl_posix_acl_release(acl);
+ 				return (error);

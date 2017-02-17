@@ -1,3 +1,15 @@
+zfs-linux (0.6.5.6-0ubuntu16) xenial; urgency=medium
+
+  * Enable zfs to respect RSIZE_LIMIT limits (LP: #1656259)
+    - backport of zfs upstream commit 4b908d32200b6e5c7b5115322b6c8d25e770daa0
+      ("Linux 4.8 compat: posix_acl_valid()") to facilitate changes in posix_acl_valid.
+      1015-Linux-4.8-compat-posix_acl_valid.patch
+    - backport of upstream commit 933ec999511f3d29de005bfa8966ae007b161c0f
+      ("Retire .write/.read file operations")
+      1016-Retire-.write-.read-file-operations.patch
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 17 Feb 2017 11:00:12 +0000
+
 zfs-linux (0.6.5.6-0ubuntu15) xenial; urgency=medium
 
   * Fix zpool import with vdev on zvol hang (LP: #1636517)
