@@ -52,6 +52,8 @@
 #include "zfs_prop.h"
 #include "zfeature_common.h"
 
+static int zfs_major_ver, zfs_minor_ver;
+
 int
 libzfs_errno(libzfs_handle_t *hdl)
 {
@@ -640,11 +642,22 @@ libzfs_print_on_error(libzfs_handle_t *hdl, boolean_t printerr)
 static int
 libzfs_module_loaded(const char *module)
 {
+	FILE *fp;
 	const char path_prefix[] = "/sys/module/";
 	char path[256];
 
 	memcpy(path, path_prefix, sizeof (path_prefix) - 1);
 	strcpy(path + sizeof (path_prefix) - 1, module);
+
+	strcpy(path + sizeof (path_prefix) - 1 + strlen(module), "/version");
+	fp = fopen(path, "r");
+	if (fp) {
+		if (fscanf(fp, "%d.%d", &zfs_major_ver, &zfs_minor_ver) != 2) {
+			zfs_major_ver = 0;
+			zfs_minor_ver = 0;
+		}
+		fclose(fp);
+	}
 
 	return (access(path, F_OK) == 0);
 }
@@ -1150,7 +1163,120 @@ zcmd_read_dst_nvlist(libzfs_handle_t *hdl, zfs_cmd_t *zc, nvlist_t **nvlp)
 int
 zfs_ioctl(libzfs_handle_t *hdl, int request, zfs_cmd_t *zc)
 {
-	return (ioctl(hdl->libzfs_fd, request, zc));
+	zfs_cmd_V070_t zc_070;
+	int rc;
+
+	if ((zfs_major_ver * 100) + zfs_minor_ver < 7)
+		return (ioctl(hdl->libzfs_fd, request, zc));
+
+	memcpy(zc_070.zc_name, zc->zc_name, sizeof zc_070.zc_name);
+	zc_070.zc_nvlist_src = zc->zc_nvlist_src;
+	zc_070.zc_nvlist_src_size = zc->zc_nvlist_src_size;
+	zc_070.zc_nvlist_dst = zc->zc_nvlist_dst;
+	zc_070.zc_nvlist_dst_size = zc->zc_nvlist_dst_size;
+	zc_070.zc_nvlist_dst_filled = zc->zc_nvlist_dst_filled;
+	zc_070.zc_pad2 = zc->zc_pad2;
+	zc_070.zc_history = zc->zc_history;
+	memcpy(zc_070.zc_value, zc->zc_value, sizeof zc_070.zc_value);
+	memcpy(zc_070.zc_string, zc->zc_string, sizeof zc_070.zc_string);
+	zc_070.zc_guid = zc->zc_guid;
+	zc_070.zc_nvlist_conf = zc->zc_nvlist_conf;
+	zc_070.zc_nvlist_conf_size = zc->zc_nvlist_conf_size;
+	zc_070.zc_cookie = zc->zc_cookie;
+	zc_070.zc_objset_type = zc->zc_objset_type;
+	zc_070.zc_perm_action = zc->zc_perm_action;
+	zc_070.zc_history_len = zc->zc_history_len;
+	zc_070.zc_history_offset = zc->zc_history_offset;
+	zc_070.zc_obj = zc->zc_obj;
+	zc_070.zc_iflags = zc->zc_iflags;
+	zc_070.zc_share = zc->zc_share;
+	zc_070.zc_objset_stats = zc->zc_objset_stats;
+	zc_070.zc_begin_record = zc->zc_begin_record;
+
+	zc_070.zc_inject_record.zi_objset = zc->zc_inject_record.zi_objset;
+	zc_070.zc_inject_record.zi_object = zc->zc_inject_record.zi_object;
+	zc_070.zc_inject_record.zi_start = zc->zc_inject_record.zi_start;
+	zc_070.zc_inject_record.zi_end = zc->zc_inject_record.zi_end;
+	zc_070.zc_inject_record.zi_guid = zc->zc_inject_record.zi_guid;
+	zc_070.zc_inject_record.zi_level = zc->zc_inject_record.zi_level;
+	zc_070.zc_inject_record.zi_error = zc->zc_inject_record.zi_error;
+	zc_070.zc_inject_record.zi_type = zc->zc_inject_record.zi_type;
+	zc_070.zc_inject_record.zi_freq = zc->zc_inject_record.zi_freq;
+	zc_070.zc_inject_record.zi_failfast = zc->zc_inject_record.zi_failfast;
+	memcpy(zc_070.zc_inject_record.zi_func, zc->zc_inject_record.zi_func, sizeof zc_070.zc_inject_record.zi_func);
+	zc_070.zc_inject_record.zi_iotype = zc->zc_inject_record.zi_iotype;
+	zc_070.zc_inject_record.zi_duration = zc->zc_inject_record.zi_duration;
+	zc_070.zc_inject_record.zi_timer = zc->zc_inject_record.zi_timer;
+	zc_070.zc_inject_record.zi_nlanes = 0;
+	zc_070.zc_inject_record.zi_cmd = zc->zc_inject_record.zi_cmd;
+	zc_070.zc_inject_record.zi_pad = zc->zc_inject_record.zi_pad;
+
+	zc_070.zc_defer_destroy = zc->zc_defer_destroy;
+	zc_070.zc_flags = zc->zc_flags;
+	zc_070.zc_action_handle = zc->zc_action_handle;
+	zc_070.zc_cleanup_fd = zc->zc_cleanup_fd;
+	zc_070.zc_simple = zc->zc_simple;
+	memcpy(zc_070.zc_pad, zc->zc_pad, sizeof zc_070.zc_pad);
+	zc_070.zc_sendobj = zc->zc_sendobj;
+	zc_070.zc_fromobj = zc->zc_fromobj;
+	zc_070.zc_createtxg = zc->zc_createtxg;
+	zc_070.zc_stat = zc->zc_stat;
+
+	rc = ioctl(hdl->libzfs_fd, request, &zc_070);
+
+	memcpy(zc->zc_name, zc_070.zc_name, sizeof zc->zc_name);
+	zc->zc_nvlist_src = zc_070.zc_nvlist_src;
+	zc->zc_nvlist_src_size = zc_070.zc_nvlist_src_size;
+	zc->zc_nvlist_dst = zc_070.zc_nvlist_dst;
+	zc->zc_nvlist_dst_size = zc_070.zc_nvlist_dst_size;
+	zc->zc_nvlist_dst_filled = zc_070.zc_nvlist_dst_filled;
+	zc->zc_pad2 = zc_070.zc_pad2;
+	zc->zc_history = zc_070.zc_history;
+	memcpy(zc->zc_value, zc_070.zc_value, sizeof zc->zc_value);
+	memcpy(zc->zc_string, zc_070.zc_string, sizeof zc->zc_string);
+	zc->zc_guid = zc_070.zc_guid;
+	zc->zc_nvlist_conf = zc_070.zc_nvlist_conf;
+	zc->zc_nvlist_conf_size = zc_070.zc_nvlist_conf_size;
+	zc->zc_cookie = zc_070.zc_cookie;
+	zc->zc_objset_type = zc_070.zc_objset_type;
+	zc->zc_perm_action = zc_070.zc_perm_action;
+	zc->zc_history_len = zc_070.zc_history_len;
+	zc->zc_history_offset = zc_070.zc_history_offset;
+	zc->zc_obj = zc_070.zc_obj;
+	zc->zc_iflags = zc_070.zc_iflags;
+	zc->zc_share = zc_070.zc_share;
+	zc->zc_objset_stats = zc_070.zc_objset_stats;
+	zc->zc_begin_record = zc_070.zc_begin_record;
+
+	zc->zc_inject_record.zi_objset = zc_070.zc_inject_record.zi_objset;
+	zc->zc_inject_record.zi_object = zc_070.zc_inject_record.zi_object;
+	zc->zc_inject_record.zi_start = zc_070.zc_inject_record.zi_start;
+	zc->zc_inject_record.zi_end = zc_070.zc_inject_record.zi_end;
+	zc->zc_inject_record.zi_guid = zc_070.zc_inject_record.zi_guid;
+	zc->zc_inject_record.zi_level = zc_070.zc_inject_record.zi_level;
+	zc->zc_inject_record.zi_error = zc_070.zc_inject_record.zi_error;
+	zc->zc_inject_record.zi_type = zc_070.zc_inject_record.zi_type;
+	zc->zc_inject_record.zi_freq = zc_070.zc_inject_record.zi_freq;
+	zc->zc_inject_record.zi_failfast = zc_070.zc_inject_record.zi_failfast;
+	memcpy(zc->zc_inject_record.zi_func, zc_070.zc_inject_record.zi_func, sizeof zc->zc_inject_record.zi_func);
+	zc->zc_inject_record.zi_iotype = zc_070.zc_inject_record.zi_iotype;
+	zc->zc_inject_record.zi_duration = zc_070.zc_inject_record.zi_duration;
+	zc->zc_inject_record.zi_timer = zc_070.zc_inject_record.zi_timer;
+	zc->zc_inject_record.zi_cmd = zc_070.zc_inject_record.zi_cmd;
+	zc->zc_inject_record.zi_pad = zc_070.zc_inject_record.zi_pad;
+
+	zc->zc_defer_destroy = zc_070.zc_defer_destroy;
+	zc->zc_flags = zc_070.zc_flags;
+	zc->zc_action_handle = zc_070.zc_action_handle;
+	zc->zc_cleanup_fd = zc_070.zc_cleanup_fd;
+	zc->zc_simple = zc_070.zc_simple;
+	memcpy(zc->zc_pad, zc_070.zc_pad, sizeof zc->zc_pad);
+	zc->zc_sendobj = zc_070.zc_sendobj;
+	zc->zc_fromobj = zc_070.zc_fromobj;
+	zc->zc_createtxg = zc_070.zc_createtxg;
+	zc->zc_stat = zc_070.zc_stat;
+
+	return rc;
 }
 
 /*
