@@ -23,3 +23,4 @@ ubuntu-load-zfs-unconditionally.patch
 2000-increase-default-zcmd-allocation-to-256K.patch
 2001-Linux-4.13-compat-bio-bi_status-and-blk_status_t.patch
 2002-Linux-4.14-compat.patch
+2200-add-zfs-0.7.0-ioctl-compat-shim.patch
