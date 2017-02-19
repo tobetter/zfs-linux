@@ -1,3 +1,11 @@
+zfs-linux (0.6.5.6-0ubuntu19) xenial; urgency=medium
+
+  * Add ZFS 0.7.0 kernel ioctl binary compat shim (LP: #1737761)
+    Detect ZFS kernel driver version and copy zfs ioctl command to the
+    newer ZFS 0.7.0 ioctl command layout.
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 19 Feb 2017 13:04:11 +0100
+
 zfs-linux (0.6.5.6-0ubuntu18) xenial; urgency=medium
 
   * Improve cloning performance for large numbers of clones (LP: #1567557)
