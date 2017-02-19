@@ -1,3 +1,11 @@
+zfs-linux (0.6.5.11-1ubuntu6) bionic; urgency=medium
+
+  * Add ZFS 0.7.0 kernel ioctl binary compat shim (LP: #1737761)
+    Detect ZFS kernel driver version and copy zfs ioctl command to the
+    newer ZFS 0.7.0 ioctl command layout.
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 19 Feb 2017 13:04:11 +0100
+
 zfs-linux (0.6.5.11-1ubuntu5) bionic; urgency=medium
 
   * Set Restrictions: isolation-machine in debian/tests/control.  The test
