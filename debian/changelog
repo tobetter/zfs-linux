@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.9-4ubuntu1) zesty; urgency=medium
+
+  * ubuntu-load-zfs-unconditionally.patch:
+    Load zfs module unconditionally for zesty (LP: #1672749)
+
+ -- Aron Xu <happyaron@ubuntu.com>  Wed, 15 Mar 2017 13:19:13 +0800
+
 zfs-linux (0.6.5.9-4) unstable; urgency=medium
 
   * autopkgtest: load zfs module before running tests
