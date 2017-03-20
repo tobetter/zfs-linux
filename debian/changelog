@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.9-5ubuntu1) zesty; urgency=medium
+
+  * Resynchronize with Debian, remianing changes:
+    - Load zfs module unconditionally for zesty
+
+ -- Aron Xu <happyaron@ubuntu.com>  Mon, 20 Mar 2017 11:24:41 +0800
+
 zfs-linux (0.6.5.9-5) unstable; urgency=medium
 
   * Add zfs initramfs conf for root pool setup
