@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.9-5ubuntu2) zesty; urgency=medium
+
+  * In the spirit of the dropped change from 0.6.5.7-0ubuntu3, don't
+    recommend zfs-modules on 32-bit arches.  This is technically not
+    correct, but we also don't/can't support ZFS on 32-bit without a
+    great deal of upstream work documented by zfsonlinux developers.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Mon, 27 Mar 2017 17:20:15 -0600
+
 zfs-linux (0.6.5.9-5ubuntu1) zesty; urgency=medium
 
   * Resynchronize with Debian, remianing changes:
