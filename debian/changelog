@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.9-5ubuntu3) zesty; urgency=medium
+
+  * Fix debian/control.in with the previous fix made to debian/control.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Mon, 27 Mar 2017 23:52:45 -0600
+
 zfs-linux (0.6.5.9-5ubuntu2) zesty; urgency=medium
 
   * In the spirit of the dropped change from 0.6.5.7-0ubuntu3, don't
