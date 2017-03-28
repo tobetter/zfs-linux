@@ -63,7 +63,6 @@ Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends},
  libuutil1-udeb (= ${binary:Version}), libnvpair1-udeb (= ${binary:Version}),
  libzfs2-udeb (= ${binary:Version}), libzpool2-udeb (= ${binary:Version}),
- zfs-modules,
 Description: command-line tools to manage OpenZFS filesystems (debian-installer)
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data checksums.
