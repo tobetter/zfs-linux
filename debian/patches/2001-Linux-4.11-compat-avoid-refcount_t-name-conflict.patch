@@ -1,0 +1,86 @@
+From 4859fe796c5b03687a7b2ab3735b882c4f5cad66 Mon Sep 17 00:00:00 2001
+From: Olaf Faaland <faaland1@llnl.gov>
+Date: Tue, 28 Feb 2017 16:10:18 -0800
+Subject: [PATCH] Linux 4.11 compat: avoid refcount_t name conflict
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Linux 4.11 introduces a new type, refcount_t, which conflicts with the
+type of the same name defined within ZFS.
+
+Rename the ZFS type zfs_refcount_t.  Within the ZFS code, use a macro to
+cause references to refcount_t to be changed to zfs_refcount_t at
+compile time.  This reduces conflicts when later landing OpenZFS
+patches.
+
+Reviewed-by: George Melikov <mail@gmelikov.ru>
+Reviewed-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Olaf Faaland <faaland1@llnl.gov>
+(backport of upstream commit 4859fe796c5b03687a7b2ab3735b882c4f5cad66)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+Closes #5823
+Closes #5842
+
+Index: zfs-linux-0.6.5.9/include/sys/refcount.h
+===================================================================
+--- zfs-linux-0.6.5.9.orig/include/sys/refcount.h
++++ zfs-linux-0.6.5.9/include/sys/refcount.h
+@@ -40,6 +40,17 @@ extern "C" {
+  */
+ #define	FTAG ((char *)__func__)
+ 
++/*
++ * Starting with 4.11, torvalds/linux@f405df5, the linux kernel defines a
++ * refcount_t type of its own.  The macro below effectively changes references
++ * in the ZFS code from refcount_t to zfs_refcount_t at compile time, so that
++ * existing code need not be altered, reducing conflicts when landing openZFS
++ * patches.
++ */
++
++#define	refcount_t	zfs_refcount_t
++#define	refcount_add	zfs_refcount_add
++
+ #ifdef	ZFS_DEBUG
+ typedef struct reference {
+ 	list_node_t ref_link;
+@@ -55,7 +66,7 @@ typedef struct refcount {
+ 	list_t rc_removed;
+ 	int64_t rc_count;
+ 	int64_t rc_removed_count;
+-} refcount_t;
++} zfs_refcount_t;
+ 
+ /* Note: refcount_t must be initialized with refcount_create[_untracked]() */
+ 
+@@ -65,7 +76,7 @@ void refcount_destroy(refcount_t *rc);
+ void refcount_destroy_many(refcount_t *rc, uint64_t number);
+ int refcount_is_zero(refcount_t *rc);
+ int64_t refcount_count(refcount_t *rc);
+-int64_t refcount_add(refcount_t *rc, void *holder_tag);
++int64_t zfs_refcount_add(refcount_t *rc, void *holder_tag);
+ int64_t refcount_remove(refcount_t *rc, void *holder_tag);
+ int64_t refcount_add_many(refcount_t *rc, uint64_t number, void *holder_tag);
+ int64_t refcount_remove_many(refcount_t *rc, uint64_t number, void *holder_tag);
+@@ -86,7 +97,7 @@ typedef struct refcount {
+ #define	refcount_destroy_many(rc, number) ((rc)->rc_count = 0)
+ #define	refcount_is_zero(rc) ((rc)->rc_count == 0)
+ #define	refcount_count(rc) ((rc)->rc_count)
+-#define	refcount_add(rc, holder) atomic_add_64_nv(&(rc)->rc_count, 1)
++#define	zfs_refcount_add(rc, holder) atomic_add_64_nv(&(rc)->rc_count, 1)
+ #define	refcount_remove(rc, holder) atomic_add_64_nv(&(rc)->rc_count, -1)
+ #define	refcount_add_many(rc, number, holder) \
+ 	atomic_add_64_nv(&(rc)->rc_count, number)
+Index: zfs-linux-0.6.5.9/module/zfs/refcount.c
+===================================================================
+--- zfs-linux-0.6.5.9.orig/module/zfs/refcount.c
++++ zfs-linux-0.6.5.9/module/zfs/refcount.c
+@@ -137,7 +137,7 @@ refcount_add_many(refcount_t *rc, uint64
+ }
+ 
+ int64_t
+-refcount_add(refcount_t *rc, void *holder)
++zfs_refcount_add(refcount_t *rc, void *holder)
+ {
+ 	return (refcount_add_many(rc, 1, holder));
+ }

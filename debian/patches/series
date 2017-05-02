@@ -19,3 +19,5 @@ enable-zed.patch
 0336-Properly-use-the-Dracut-cleanup-hook-to-order-pool-s.patch
 0020-Fix-initramfs-hook-for-merged-usr-lib-and-lib.patch
 ubuntu-load-zfs-unconditionally.patch
+2000-Linux-4.11-compat-iops.getattr-and-friends.patch
+2001-Linux-4.11-compat-avoid-refcount_t-name-conflict.patch
