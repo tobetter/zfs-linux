@@ -1,3 +1,11 @@
+zfs-linux (0.6.5.9-5ubuntu5) artful; urgency=medium
+
+  * Add 4.11 compat patches from upstream to build with 4.11 kernel:
+    - a3478c07475261 Linux 4.11 compat: iops.getattr and friends
+    - 4859fe796c5b03 Linux 4.11 compat: avoid refcount_t name conflict
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 02 May 2017 12:08:11 +0100
+
 zfs-linux (0.6.5.9-5ubuntu4) zesty; urgency=medium
 
   * Or, just revert to the 0.6.5.7-0ubuntu3 state of no module deps.
