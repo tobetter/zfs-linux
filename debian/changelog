@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.8-0ubuntu4.3) yakkety; urgency=low
+
+  * Fix incorrect path to rm in zfs-share.service.in (LP: #1684731)
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 22 May 2017 17:13:44 +0100
+
 zfs-linux (0.6.5.8-0ubuntu4.2) yakkety; urgency=low
 
   * Enable zfs to respect RSIZE_LIMIT limits (LP: #1656259)
