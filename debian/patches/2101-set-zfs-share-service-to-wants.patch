@@ -1,0 +1,13 @@
+Index: zfs-linux-0.6.5.6/etc/systemd/system/zfs.target.in
+===================================================================
+--- zfs-linux-0.6.5.6.orig/etc/systemd/system/zfs.target.in
++++ zfs-linux-0.6.5.6/etc/systemd/system/zfs.target.in
+@@ -1,7 +1,7 @@
+ [Unit]
+ Description=ZFS startup target
+ Requires=zfs-mount.service
+-Requires=zfs-share.service
++Wants=zfs-share.service
+ Wants=zed.service
+ 
+ [Install]

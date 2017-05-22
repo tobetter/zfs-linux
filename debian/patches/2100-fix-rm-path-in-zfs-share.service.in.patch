@@ -1,0 +1,11 @@
+Index: zfs-linux-0.6.5.6/etc/systemd/system/zfs-share.service.in
+===================================================================
+--- zfs-linux-0.6.5.6.orig/etc/systemd/system/zfs-share.service.in
++++ zfs-linux-0.6.5.6/etc/systemd/system/zfs-share.service.in
+@@ -10,5 +10,5 @@ PartOf=smb.service
+ [Service]
+ Type=oneshot
+ RemainAfterExit=yes
+-ExecStartPre=-@bindir@/rm /etc/dfs/sharetab
++ExecStartPre=-/bin/rm -f /etc/dfs/sharetab
+ ExecStart=@sbindir@/zfs share -a
