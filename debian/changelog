@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.9-5ubuntu4.1) zesty; urgency=medium
+
+  * Fix incorrect path to rm in zfs-share.service.in (LP: #1684731)
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 22 May 2017 17:13:44 +0100
+
 zfs-linux (0.6.5.9-5ubuntu4) zesty; urgency=medium
 
   * Or, just revert to the 0.6.5.7-0ubuntu3 state of no module deps.
