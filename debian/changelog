@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.9-5ubuntu6) artful; urgency=medium
+
+  * Fix incorrect path to rm in zfs-share.service.in (LP: #1684731)
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 22 May 2017 17:13:44 +0100
+
 zfs-linux (0.6.5.9-5ubuntu5) artful; urgency=medium
 
   * Add 4.11 compat patches from upstream to build with 4.11 kernel:
