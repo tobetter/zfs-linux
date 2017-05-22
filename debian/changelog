@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.6-0ubuntu17) xenial; urgency=medium
+
+  * Fix incorrect path to rm in zfs-share.service.in (LP: #1684731)
+  * Set zfs-share.service to Wants in zfs.target (LP: #1614789)
+    - Change from Requires to Wants to stop systemctl mask
+      zfs-share.service from breaking zfs mounts
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 22 May 2017 17:13:44 +0100
+
 zfs-linux (0.6.5.6-0ubuntu16) xenial; urgency=medium
 
   * Enable zfs to respect RSIZE_LIMIT limits (LP: #1656259)
