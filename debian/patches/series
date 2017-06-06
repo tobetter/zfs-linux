@@ -22,3 +22,7 @@ ubuntu-load-zfs-unconditionally.patch
 2000-Linux-4.11-compat-iops.getattr-and-friends.patch
 2001-Linux-4.11-compat-avoid-refcount_t-name-conflict.patch
 2100-fix-rm-path-in-zfs-share.service.in.patch
+2200-Linux-4.12-compat-super_setup_bdi_name.patch
+2201-Linux-4.12-compat-PF_FSTRANS-was-removed.patch
+2202-Linux-4.12-compat-CURRENT_TIME-removed.patch
+2203-Linux-4.12-compat-fix-super_setup_bdi_name-call.patch
