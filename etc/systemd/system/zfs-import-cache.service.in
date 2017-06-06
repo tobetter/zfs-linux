@@ -6,7 +6,6 @@ After=systemd-udev-settle.service
 After=cryptsetup.target
 Before=dracut-mount.service
 After=systemd-remount-fs.service
-ConditionPathExists=@sysconfdir@/zfs/zpool.cache
 
 [Service]
 Type=oneshot
