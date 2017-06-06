@@ -1,3 +1,13 @@
+zfs-linux (0.6.5.9-5ubuntu7) artful; urgency=medium
+
+   * Add 4.12 compat patches from upstream to build with 4.12 kernel:
+    - 608d6942b70436 Linux 4.12 compat: super_setup_bdi_name()
+    - e624cd19599047 Linux 4.12 compat: PF_FSTRANS was removed
+    - 2946a1a15aab87 Linux 4.12 compat: CURRENT_TIME removed
+    - 3e6c9433474f0b Linux 4.12 compat: fix super_setup_bdi_name() call
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 06 Jun 2017 18:37:55 +0100
+
 zfs-linux (0.6.5.9-5ubuntu6) artful; urgency=medium
 
   * Fix incorrect path to rm in zfs-share.service.in (LP: #1684731)
