@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.10-1ubuntu1) artful; urgency=medium
+
+  * Restrore dropped change to remove zfs-modules deps from binary packages.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Thu, 06 Jul 2017 11:48:55 -0600
+
 zfs-linux (0.6.5.10-1) unstable; urgency=medium
 
   * Add kernel version to depmod cmd (Closes: #860958)
