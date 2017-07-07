@@ -1,3 +1,13 @@
+zfs-linux (0.6.5.10-1ubuntu2) artful; urgency=medium
+
+  * Restore dropped patches:
+    - ubuntu-load-zfs-unconditionally.patch
+    - 2100-fix-rm-path-in-zfs-share.service.in.patch
+    - 2200-Linux-4.12-compat-super_setup_bdi_name.patch
+      re-worked to merge it with 0.6.5.10
+
+ -- Colin Ian King <colin.king@ubuntu.com>  Fri, 07 Jul 2017 13:24:22 +0100
+
 zfs-linux (0.6.5.10-1ubuntu1) artful; urgency=medium
 
   * Restrore dropped change to remove zfs-modules deps from binary packages.

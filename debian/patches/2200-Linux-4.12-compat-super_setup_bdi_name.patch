@@ -1,0 +1,41 @@
+From 608d6942b7043614b68bcd09a0873660a4ebb052 Mon Sep 17 00:00:00 2001
+From: Colin Ian King <colin.king@canonical.com>
+Date: Tue, 6 Jun 2017 12:46:58 +0000
+Subject: [PATCH] Linux 4.12 compat: super_setup_bdi_name()
+
+All filesystems were converted to dynamically allocated BDIs.  The
+destruction of backing_dev_info structures is handled as part of
+super block destruction.  Refactor the code to abstract away the
+details of creating and destroying a BDI.
+
+Reviewed-by: Chunwei Chen <david.chen@osnexus.com>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Closes #6089
+(backported from zfs upstream commit 7dae2c81e7b2e68a596c5b431444be0fae308156)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+
+Index: zfs-linux-0.6.5.10/include/sys/zfs_vfsops.h
+===================================================================
+--- zfs-linux-0.6.5.10.orig/include/sys/zfs_vfsops.h
++++ zfs-linux-0.6.5.10/include/sys/zfs_vfsops.h
+@@ -64,7 +64,6 @@ typedef struct zfs_mntopts {
+ 
+ typedef struct zfs_sb {
+ 	struct super_block *z_sb;	/* generic super_block */
+-	struct backing_dev_info z_bdi;	/* generic backing dev info */
+ 	struct zfs_sb	*z_parent;	/* parent fs */
+ 	objset_t	*z_os;		/* objset reference */
+ 	zfs_mntopts_t	*z_mntopts;	/* passed mount options */
+Index: zfs-linux-0.6.5.10/module/zfs/zfs_vfsops.c
+===================================================================
+--- zfs-linux-0.6.5.10.orig/module/zfs/zfs_vfsops.c
++++ zfs-linux-0.6.5.10/module/zfs/zfs_vfsops.c
+@@ -1403,8 +1403,6 @@ zfs_domount(struct super_block *sb, zfs_
+ 	sb->s_time_gran = 1;
+ 	sb->s_blocksize = recordsize;
+ 	sb->s_blocksize_bits = ilog2(recordsize);
+-	zsb->z_bdi.ra_pages = 0;
+-	sb->s_bdi = &zsb->z_bdi;
+ 
+ 	error = -zpl_bdi_setup(sb, "zfs");
+ 	if (error)
