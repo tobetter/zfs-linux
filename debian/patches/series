@@ -18,3 +18,6 @@ enable-zed.patch
 0334-Use-F-to-export-pools-so-as-not-to-dirty-up-device-l.patch
 0336-Properly-use-the-Dracut-cleanup-hook-to-order-pool-s.patch
 0020-Fix-initramfs-hook-for-merged-usr-lib-and-lib.patch
+ubuntu-load-zfs-unconditionally.patch
+2100-fix-rm-path-in-zfs-share.service.in.patch
+2200-Linux-4.12-compat-super_setup_bdi_name.patch
