@@ -1,0 +1,145 @@
+./x
+./changelog
+1c1
+< zfs-linux (0.6.5.11-1) unstable; urgency=medium
+---
+> zfs-linux (0.6.5.10-1ubuntu2) artful; urgency=medium
+3,4c3,7
+<   [ Aron Xu ]
+<   * Imported Upstream version 0.6.5.11
+---
+>   * Restore dropped patches:
+>     - ubuntu-load-zfs-unconditionally.patch
+>     - 2100-fix-rm-path-in-zfs-share.service.in.patch
+>     - 2200-Linux-4.12-compat-super_setup_bdi_name.patch
+>       re-worked to merge it with 0.6.5.10
+6,7c9
+<   [ Fabian Grünbichler ]
+<   * fix rm path in zfs-share.service
+---
+>  -- Colin Ian King <colin.king@ubuntu.com>  Fri, 07 Jul 2017 13:24:22 +0100
+9c11,15
+<  -- Aron Xu <aron@debian.org>  Fri, 14 Jul 2017 16:33:23 +0800
+---
+> zfs-linux (0.6.5.10-1ubuntu1) artful; urgency=medium
+> 
+>   * Restrore dropped change to remove zfs-modules deps from binary packages.
+> 
+>  -- Adam Conrad <adconrad@ubuntu.com>  Thu, 06 Jul 2017 11:48:55 -0600
+./libnvpair1linux.install
+./patches/0032-A-collection-of-dracut-fixes.patch
+./patches/0336-Properly-use-the-Dracut-cleanup-hook-to-order-pool-s.patch
+./patches/1001-cmd-python-exec-path.patch
+./patches/0334-Use-F-to-export-pools-so-as-not-to-dirty-up-device-l.patch
+./patches/0296-Use-a-different-technique-to-detect-whether-to-mount.patch
+./patches/ubuntu-load-zfs-unconditionally.patch
+./patches/0001-Prevent-manual-builds-in-the-DKMS-source.patch
+./patches/0003-Add-libuutil-to-LIBADD-for-libzfs-and-libzfs_core.patch
+./patches/0002-Check-for-META-and-DCH-consistency-in-autoconf.patch
+./patches/1003-linux-4.9-compat.patch
+./patches/series
+6d5
+< 1003-fix-rm-path-in-zfs-share.service.patch
+22a22
+> 2100-fix-rm-path-in-zfs-share.service.in.patch
+./patches/1004-zed-service-bindir.patch
+./patches/enable-zed.patch
+./patches/0159-Set-proper-dependency-for-string-replacement-targets.patch
+./patches/1002-Fix-dev-zfs-device-is-missing.patch
+./patches/1002-fix-mips-build.patch
+./patches/0001-fix-booting-via-dracut-generated-initramfs.patch
+./patches/1000-ppc64el-endian-support.patch
+./patches/0246-Fix-regression-that-broke-dracut-initramfs-generatio.patch
+./patches/1003-fix-rm-path-in-zfs-share.service.patch
+./patches/0034-Fix-the-test-to-use-the-variable.patch
+./patches/0220-zfs-dracut-module-should-not-assume-systemd-presence.patch
+./patches/0219-Adapt-genkernel-fix-for-zfsonlinux-zfs-4749-to-zfs-d.patch
+./patches/0020-Fix-initramfs-hook-for-merged-usr-lib-and-lib.patch
+./patches/2200-Linux-4.12-compat-super_setup_bdi_name.patch
+./zfs-dkms.install
+./zfs-dkms.prerm
+./zfs-dkms.config
+./zfsutils-linux-udeb.isinstallable
+./zfs-modules-_KVERS_.postrm.in
+./README.Source
+./libzpool2linux.install
+./po/zh_CN.po
+./po/POTFILES.in
+./po/ja.po
+./po/templates.pot
+./po/it.po
+./po/nl.po
+./po/pl.po
+./po/sv.po
+./po/da.po
+./po/de.po
+./po/pt.po
+./po/cs.po
+./po/fr.po
+./po/nb.po
+./po/ru.po
+./control
+./libuutil1linux.lintian-overrides
+./tests/kernel-smoke-test-pool-raidz3
+./tests/kernel-smoke-test-send-receive
+./tests/kernel-smoke-test-pool-raidz1
+./tests/kernel-smoke-test-pool-2x2-mirror
+./tests/control
+./tests/kernel-smoke-test-pool-nested-raidz3
+./tests/kernel-smoke-test-scrub
+./tests/kernel-smoke-test-pool-raidz2
+./tests/kernel-smoke-test-filesystem
+./tests/kernel-smoke-test-pool-4x1-mirror
+./tests/kernel-smoke-test-pool-striped
+./tests/kernel-smoke-test-zil
+./tests/kernel-smoke-test-clone
+./tests/kernel-smoke-test
+./tests/kernel-smoke-test-snapshot
+./zfs
+./zfsutils-linux.install
+./libnvpair1linux-udeb.install
+./zfs-dkms.dkms
+./libuutil1linux.docs
+./control.in
+./control.udeb.in
+./gbp.conf
+./zfs-modules-_KVERS_.postinst.in
+./source/format
+./control.modules.in
+./libzpool2linux-udeb.install
+./zfsutils-linux.cron.d
+./libzfs2linux.docs
+./zfs-initramfs.triggers
+./rules
+./libzfs2linux.lintian-overrides
+./libuutil1linux-udeb.install
+./compat
+./zfs-modules-_KVERS_.install.in
+./zfs-dkms.templates
+./zfs-initramfs.install
+./zfs-modules-_KVERS_-di.install.in
+./libnvpair1linux.docs
+./copyright
+./libzfslinux-dev.install
+./libuutil1linux.install
+./libzfs2linux-udeb.install
+./libzpool2linux.lintian-overrides
+./README.Debian
+./zfsutils-linux.docs
+./zfsutils-linux-udeb.install
+./zfs-dkms.docs
+./tree/zfsutils-linux/usr/share/initramfs-tools/hooks/zdev
+./tree/zfsutils-linux/usr/share/bash-completion/completions/zfs
+./tree/zfsutils-linux/usr/lib/zfs-linux/scrub
+./tree/zfsutils-linux/usr/lib/os-probes/10zvol-test
+./tree/zfsutils-linux/etc/sudoers.d/zfs
+./zfs-dkms.postinst
+./libzpool2linux.docs
+./libzfs2linux.install
+./watch
+./copyright.cme
+./zfs-zed.install
+./zfsutils-linux.examples
+./libnvpair1linux.lintian-overrides
+./zfs-dracut.install
+./libzfslinux-dev.docs
