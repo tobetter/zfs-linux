@@ -1,3 +1,13 @@
+zfs-linux (0.6.5.11-1ubuntu1) artful; urgency=medium
+
+  [ Colin Ian King ]
+  * Remove patch 2100-fix-rm-path-in-zfs-share.service.in.patch
+    as this is superceeded by 1003-fix-rm-path-in-zfs-share.service.patch
+  * Remove 2200-Linux-4.12-compat-super_setup_bdi_name.patch as this is
+    now in zfs 0.6.5.11
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 7 Aug 2017 10:06:01 +0100
+
 zfs-linux (0.6.5.11-1) unstable; urgency=medium
 
   [ Aron Xu ]
