@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.11-1ubuntu2) artful; urgency=medium
+
+  * Improve cloning performance for large numbers of clones (LP: #1567557)
+    Bump zcmd buffer from 16K to 256K.
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 8 Aug 2017 17:19:21 +0100
+
 zfs-linux (0.6.5.11-1ubuntu1) artful; urgency=medium
 
   [ Colin Ian King ]
