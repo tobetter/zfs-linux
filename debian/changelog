@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.11-1ubuntu3) artful; urgency=medium
+
+  * Add 4.13 backported patches from ZFS
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 9 Aug 2017 12:57:11 +0100
+
 zfs-linux (0.6.5.11-1ubuntu2) artful; urgency=medium
 
   * Improve cloning performance for large numbers of clones (LP: #1567557)
