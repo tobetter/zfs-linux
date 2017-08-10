@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.9-5ubuntu4.2) zesty; urgency=medium
+
+  * Improve cloning performance for large numbers of clones (LP: #1567557)
+    Bump zcmd buffer from 16K to 256K.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 10 Aug 2017 13:48:11 +0100
+
 zfs-linux (0.6.5.9-5ubuntu4.1) zesty; urgency=medium
 
   * Fix incorrect path to rm in zfs-share.service.in (LP: #1684731)
