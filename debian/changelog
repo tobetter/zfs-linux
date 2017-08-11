@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.6-0ubuntu18) xenial; urgency=medium
+
+  * Improve cloning performance for large numbers of clones (LP: #1567557)
+    Bump zcmd buffer from 16K to 256K.
+  * Correctly install libraries such as libnvpair.so.1 to  /lib and not /usr/lib,
+    this also fixes boot issues (LP: #1596835)
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 11 Aug 2017 08:33:23 +0100
+
 zfs-linux (0.6.5.6-0ubuntu17) xenial; urgency=medium
 
   * Fix incorrect path to rm in zfs-share.service.in (LP: #1684731)
