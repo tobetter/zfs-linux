@@ -98,10 +98,6 @@ extern "C" {
 #endif
 #endif
 
-#if !defined(_BIG_ENDIAN) && !defined(_LITTLE_ENDIAN)
-#error powerpc no endian specified
-#endif
-
 #define	_SUNOS_VTOC_16
 
 /* arm arch specific defines */
@@ -134,7 +130,7 @@ extern "C" {
 #define	_SUNOS_VTOC_16
 
 /* sparc arch specific defines */
-#elif defined(__sparc) || defined(__sparc__) || defined(__sparc64__)
+#elif defined(__sparc) || defined(__sparc__)
 
 #if !defined(__sparc)
 #define	__sparc
@@ -147,7 +143,7 @@ extern "C" {
 #define	_BIG_ENDIAN
 #define	_SUNOS_VTOC_16
 
-#if defined(__sparc64__)
+#if defined(__arch64__)
 #if !defined(_LP64)
 #define	_LP64
 #endif
@@ -184,12 +180,16 @@ extern "C" {
 #endif
 
 #ifndef _LP64
-#define _ILP32
+#define	_ILP32
 #endif
 
 #define	_SUNOS_VTOC_16
 
-#else /* Currently x86_64, i386, arm, powerpc, s390, sparc and mips are supported */
+#else
+/*
+ * Currently supported:
+ * x86_64, i386, arm, powerpc, s390, sparc, and mips
+ */
 #error "Unsupported ISA type"
 #endif
 
