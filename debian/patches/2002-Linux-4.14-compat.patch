@@ -1,0 +1,84 @@
+From: Colin Ian King <colin.king@canonical.com>
+Date: Mon, 6 Nov 2017 17:30:00 +0000
+Subject: [PATCH 1/1] Linux 4.14 compat: workarounds for bi_bdev changes
+
+Shim around bdev changes in 4.14 block layer.
+
+--
+
+Index: zfs-linux-0.6.5.11/module/zfs/vdev_disk.c
+===================================================================
+--- zfs-linux-0.6.5.11.orig/module/zfs/vdev_disk.c
++++ zfs-linux-0.6.5.11/module/zfs/vdev_disk.c
+@@ -574,7 +574,11 @@ retry:
+ 		/* Matching put called by vdev_disk_physio_completion */
+ 		vdev_disk_dio_get(dr);
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 		dr->dr_bio[i]->bi_bdev = bdev;
++#else
++		bio_set_dev(dr->dr_bio[i], bdev);
++#endif
+ 		BIO_BI_SECTOR(dr->dr_bio[i]) = bio_offset >> 9;
+ 		dr->dr_bio[i]->bi_end_io = vdev_disk_physio_completion;
+ 		dr->dr_bio[i]->bi_private = dr;
+@@ -650,7 +654,11 @@ vdev_disk_io_flush(struct block_device *
+ 
+ 	bio->bi_end_io = vdev_disk_io_flush_completion;
+ 	bio->bi_private = zio;
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 	bio->bi_bdev = bdev;
++#else
++	bio_set_dev(bio, bdev);
++#endif
+ 	zio->io_delay = jiffies_64;
+ 	bio_set_flush(bio);
+ 	vdev_submit_bio(bio);
+Index: zfs-linux-0.6.5.11/module/zfs/zvol.c
+===================================================================
+--- zfs-linux-0.6.5.11.orig/module/zfs/zvol.c
++++ zfs-linux-0.6.5.11/module/zfs/zvol.c
+@@ -52,6 +52,7 @@
+ #include <sys/spa_impl.h>
+ #include <sys/zvol.h>
+ #include <linux/blkdev_compat.h>
++#include <linux/version.h>
+ 
+ unsigned int zvol_inhibit_dev = 0;
+ unsigned int zvol_major = ZVOL_MAJOR;
+@@ -614,7 +615,11 @@ zvol_log_write(zvol_state_t *zv, dmu_tx_
+ static int
+ zvol_write(struct bio *bio)
+ {
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 	zvol_state_t *zv = bio->bi_bdev->bd_disk->private_data;
++#else
++	zvol_state_t *zv = bio->bi_disk->private_data;
++#endif
+ 	uint64_t offset = BIO_BI_SECTOR(bio) << 9;
+ 	uint64_t size = BIO_BI_SIZE(bio);
+ 	int error = 0;
+@@ -664,7 +669,11 @@ out:
+ static int
+ zvol_discard(struct bio *bio)
+ {
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 	zvol_state_t *zv = bio->bi_bdev->bd_disk->private_data;
++#else
++	zvol_state_t *zv = bio->bi_disk->private_data;
++#endif
+ 	uint64_t start = BIO_BI_SECTOR(bio) << 9;
+ 	uint64_t size = BIO_BI_SIZE(bio);
+ 	uint64_t end = start + size;
+@@ -706,7 +715,11 @@ zvol_discard(struct bio *bio)
+ static int
+ zvol_read(struct bio *bio)
+ {
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 	zvol_state_t *zv = bio->bi_bdev->bd_disk->private_data;
++#else
++	zvol_state_t *zv = bio->bi_disk->private_data;
++#endif
+ 	uint64_t offset = BIO_BI_SECTOR(bio) << 9;
+ 	uint64_t len = BIO_BI_SIZE(bio);
+ 	int error;

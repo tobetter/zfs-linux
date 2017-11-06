@@ -1,3 +1,9 @@
+zfs-linux (0.6.5.11-1ubuntu4) bionic; urgency=medium
+
+  * Add 4.14 compat workaround to allow ZFS to build with 4.14
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 6 Nov 2017 17:33:12 +0000
+
 zfs-linux (0.6.5.11-1ubuntu3) artful; urgency=medium
 
   * Add 4.13 backported patches from ZFS
