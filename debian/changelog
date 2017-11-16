@@ -1,3 +1,11 @@
+zfs-linux (0.6.5.11-1ubuntu5) bionic; urgency=medium
+
+  * Set Restrictions: isolation-machine in debian/tests/control.  The test
+    requires loading kernel modules, so does not work correctly in
+    containers.
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Thu, 16 Nov 2017 14:01:22 -0800
+
 zfs-linux (0.6.5.11-1ubuntu4) bionic; urgency=medium
 
   * Add 4.14 compat workaround to allow ZFS to build with 4.14
