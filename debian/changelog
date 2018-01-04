@@ -1,3 +1,25 @@
+zfs-linux (0.7.4-1ubuntu1) bionic; urgency=low
+
+  * Merge from Debian unstable.
+  * New upstream release.  LP: #1734172, LP: #1706891.
+  * Remaining changes:
+    - Set Restrictions: isolation-machine in debian/tests/control.  The test
+      requires loading kernel modules, so does not work correctly in
+      containers.
+    - Drop references to zfs-modules | zfs-dkms, as this is built into the
+      Ubuntu kernel.  This delta can probably be dropped now that the kernel
+      package in the last LTS provides zfs-dkms, since the package
+      relationships will then be a no-op.
+    - debian/patches/ubuntu-load-zfs-unconditionally.patch
+  * Dropped changes, included in Debian:
+    - Bump zcmd buffer from 16K to 256K.
+  * Dropped changes, included upstream:
+    - debian/patches/2001-Linux-4.13-compat-bio-bi_status-and-blk_status_t.patch
+    - Add 4.13 backported patches from ZFS
+    - Add 4.14 compat workaround to allow ZFS to build with 4.14
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Thu, 04 Jan 2018 11:47:40 -0800
+
 zfs-linux (0.7.4-1) unstable; urgency=medium
 
   * New upstream version 0.7.4 (Closes: #884287, #883832)
@@ -61,6 +83,43 @@ zfs-linux (0.7.3-1) unstable; urgency=medium
     Bump zcmd buffer from 16K to 256K.
 
  -- Aron Xu <aron@debian.org>  Tue, 31 Oct 2017 18:52:01 +0800
+
+zfs-linux (0.6.5.11-1ubuntu5) bionic; urgency=medium
+
+  * Set Restrictions: isolation-machine in debian/tests/control.  The test
+    requires loading kernel modules, so does not work correctly in
+    containers.
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Thu, 16 Nov 2017 14:01:22 -0800
+
+zfs-linux (0.6.5.11-1ubuntu4) bionic; urgency=medium
+
+  * Add 4.14 compat workaround to allow ZFS to build with 4.14
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 6 Nov 2017 17:33:12 +0000
+
+zfs-linux (0.6.5.11-1ubuntu3) artful; urgency=medium
+
+  * Add 4.13 backported patches from ZFS
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 9 Aug 2017 12:57:11 +0100
+
+zfs-linux (0.6.5.11-1ubuntu2) artful; urgency=medium
+
+  * Improve cloning performance for large numbers of clones (LP: #1567557)
+    Bump zcmd buffer from 16K to 256K.
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 8 Aug 2017 17:19:21 +0100
+
+zfs-linux (0.6.5.11-1ubuntu1) artful; urgency=medium
+
+  [ Colin Ian King ]
+  * Remove patch 2100-fix-rm-path-in-zfs-share.service.in.patch
+    as this is superceeded by 1003-fix-rm-path-in-zfs-share.service.patch
+  * Remove 2200-Linux-4.12-compat-super_setup_bdi_name.patch as this is
+    now in zfs 0.6.5.11
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 7 Aug 2017 10:06:01 +0100
 
 zfs-linux (0.6.5.11-1) unstable; urgency=medium
 
@@ -254,3 +313,4 @@ zfs-linux (0.6.5.5-1) unstable; urgency=medium
   * Initial Release (Closes: #686447)
 
  -- Aron Xu <aron@debian.org>  Sun, 20 Mar 2016 22:57:06 +0800
+

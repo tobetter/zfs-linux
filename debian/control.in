@@ -1,7 +1,8 @@
 Source: zfs-linux
 Section: contrib/kernel
 Priority: optional
-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@lists.alioth.debian.org>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@lists.alioth.debian.org>
 Uploaders: Aron Xu <aron@debian.org>,
            Petter Reinholdtsen <pere@debian.org>,
            Carlos Alberto Lopez Perez <clopez@igalia.com>
@@ -102,7 +103,7 @@ Package: zfs-initramfs
 Architecture: all
 Depends: initramfs-tools,
  busybox-initramfs | busybox-static | busybox,
- zfs-modules | zfs-dkms, zfsutils-linux,
+ zfsutils-linux,
  ${misc:Depends}
 Description: OpenZFS root filesystem capabilities for Linux - initramfs
  The Z file system is a pooled filesystem designed for maximum data
@@ -114,7 +115,7 @@ Description: OpenZFS root filesystem capabilities for Linux - initramfs
 
 Package: zfs-dracut
 Architecture: all
-Depends: dracut, zfs-modules | zfs-dkms, zfsutils-linux, ${misc:Depends}
+Depends: dracut, zfsutils-linux, ${misc:Depends}
 Description: OpenZFS root filesystem capabilities for Linux - dracut
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data
@@ -127,7 +128,7 @@ Package: zfsutils-linux
 Section: contrib/admin
 Architecture: linux-any
 Depends: ${misc:Depends}, ${shlibs:Depends}, ${python3:Depends}, python3
-Recommends: lsb-base, zfs-modules | zfs-dkms, zfs-zed
+Recommends: lsb-base, zfs-zed
 Suggests: nfs-kernel-server, samba-common-bin (>= 3.0.23), zfs-initramfs | zfs-dracut
 Conflicts: zfs, zfs-fuse, zutils
 Provides: zfsutils
@@ -142,7 +143,7 @@ Description: command-line tools to manage OpenZFS filesystems
 Package: zfs-zed
 Section: contrib/admin
 Architecture: linux-any
-Depends: ${misc:Depends}, ${shlibs:Depends}, zfs-modules | zfs-dkms, zfsutils-linux
+Depends: ${misc:Depends}, ${shlibs:Depends}, zfsutils-linux
 Description: OpenZFS Event Daemon
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data

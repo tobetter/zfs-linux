@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zfs-linux\n"
 "Report-Msgid-Bugs-To: zfs-linux@packages.debian.org\n"
-"POT-Creation-Date: 2015-11-01 14:11+0800\n"
+"POT-Creation-Date: 2017-10-31 18:34+0800\n"
 "PO-Revision-Date: 2013-07-10 10:42+0100\n"
 "Last-Translator: Martin Bagge / brother <brother@bsnet.se>\n"
 "Language-Team: Swedish <debian-l10n-swedish@lists.debian.org>\n"
@@ -86,8 +86,18 @@ msgstr ""
 #. Description
 #: ../zfs-dkms.templates:3001
 msgid ""
-"You are going to build ZFS using DKMS in such a way that they are not going to "
-"be built into one monolithic binary. Please be aware that distributing both of "
+"You are going to build ZFS using DKMS in such a way that they are not going "
+"to be built into one monolithic binary. Please be aware that distributing "
+"both of the binaries in the same media (disk images, virtual appliances, "
+"etc) may lead to infringing."
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../zfs-dkms.templates:3001
+msgid ""
+"You are going to build ZFS using DKMS in which way they are not going to be "
+"built into one monolithic binary. Please be aware that distributing both of "
 "the binaries in the same media (disk images, virtual appliances, etc) may "
 "lead to infringing."
 msgstr ""
