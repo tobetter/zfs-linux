@@ -7,10 +7,10 @@ driver version number check to allow the ioctl interface use either
 
 Signed-off-by: Colin Ian King <colin.king@canonical.com>
 
-Index: zfs-linux-0.6.5.6/include/sys/zfs_ioctl.h
+Index: zfs-linux-0.6.5.11/include/sys/zfs_ioctl.h
 ===================================================================
---- zfs-linux-0.6.5.6.orig/include/sys/zfs_ioctl.h
-+++ zfs-linux-0.6.5.6/include/sys/zfs_ioctl.h
+--- zfs-linux-0.6.5.11.orig/include/sys/zfs_ioctl.h
++++ zfs-linux-0.6.5.11/include/sys/zfs_ioctl.h
 @@ -275,6 +275,26 @@ typedef struct zinject_record {
  	uint32_t	zi_pad;
  } zinject_record_t;
@@ -87,10 +87,10 @@ Index: zfs-linux-0.6.5.6/include/sys/zfs_ioctl.h
  typedef struct zfs_useracct {
  	char zu_domain[256];
  	uid_t zu_rid;
-Index: zfs-linux-0.6.5.6/lib/libzfs/libzfs_util.c
+Index: zfs-linux-0.6.5.11/lib/libzfs/libzfs_util.c
 ===================================================================
---- zfs-linux-0.6.5.6.orig/lib/libzfs/libzfs_util.c
-+++ zfs-linux-0.6.5.6/lib/libzfs/libzfs_util.c
+--- zfs-linux-0.6.5.11.orig/lib/libzfs/libzfs_util.c
++++ zfs-linux-0.6.5.11/lib/libzfs/libzfs_util.c
 @@ -52,6 +52,8 @@
  #include "zfs_prop.h"
  #include "zfeature_common.h"
