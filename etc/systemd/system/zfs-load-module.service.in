@@ -1,19 +1,19 @@
 [Unit]
-Description=Import ZFS pools by device scanning
-Documentation=man:zpool(8)
+Description=Install ZFS kernel module
 DefaultDependencies=no
 Requires=systemd-udev-settle.service
 Requires=zfs-load-module.service
 After=systemd-udev-settle.service
 After=cryptsetup.target
 Before=dracut-mount.service
-Before=zfs-import.target
-ConditionPathExists=!@sysconfdir@/zfs/zpool.cache
+After=systemd-remount-fs.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=@sbindir@/zpool import -aN -o cachefile=none
+ExecStart=/sbin/modprobe zfs
 
 [Install]
-WantedBy=zfs-import.target
+WantedBy=zfs-mount.service
+WantedBy=zfs.target
+
