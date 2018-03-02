@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.11-1ubuntu3.2) artful; urgency=medium
+
+  * Add new module loading systemd service (LP: #1741081)
+    - loads zfs module unconditionally, and make the
+      zfs-import-cache.service and zfs-import-scan.service services
+      require this service.
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 2 Mar 2018 11:47:12 +0000
+
 zfs-linux (0.6.5.11-1ubuntu3.1) artful; urgency=medium
 
   * Add ZFS 0.7.0 kernel ioctl binary compat shim (LP: #1737761)

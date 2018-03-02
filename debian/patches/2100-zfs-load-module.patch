@@ -1,0 +1,87 @@
+Index: zfs-linux-0.6.5.11/etc/systemd/system/zfs-load-module.service.in
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.11/etc/systemd/system/zfs-load-module.service.in
+@@ -0,0 +1,18 @@
++[Unit]
++Description=Install ZFS kernel module
++DefaultDependencies=no
++Requires=systemd-udev-settle.service
++After=systemd-udev-settle.service
++After=cryptsetup.target
++Before=dracut-mount.service
++After=systemd-remount-fs.service
++
++[Service]
++Type=oneshot
++RemainAfterExit=yes
++ExecStart=/sbin/modprobe zfs
++
++[Install]
++WantedBy=zfs-mount.service
++WantedBy=zfs.target
++
+Index: zfs-linux-0.6.5.11/etc/systemd/system/zfs-import-cache.service.in
+===================================================================
+--- zfs-linux-0.6.5.11.orig/etc/systemd/system/zfs-import-cache.service.in
++++ zfs-linux-0.6.5.11/etc/systemd/system/zfs-import-cache.service.in
+@@ -2,7 +2,9 @@
+ Description=Import ZFS pools by cache file
+ DefaultDependencies=no
+ Requires=systemd-udev-settle.service
++Requires=zfs-load-module.service
+ After=systemd-udev-settle.service
++After=zfs-load-module.service
+ After=cryptsetup.target
+ Before=dracut-mount.service
+ After=systemd-remount-fs.service
+@@ -11,7 +13,6 @@ ConditionPathExists=@sysconfdir@/zfs/zpo
+ [Service]
+ Type=oneshot
+ RemainAfterExit=yes
+-ExecStartPre=/sbin/modprobe zfs
+ ExecStart=@sbindir@/zpool import -c @sysconfdir@/zfs/zpool.cache -aN
+ 
+ [Install]
+Index: zfs-linux-0.6.5.11/etc/systemd/system/zfs-import-scan.service.in
+===================================================================
+--- zfs-linux-0.6.5.11.orig/etc/systemd/system/zfs-import-scan.service.in
++++ zfs-linux-0.6.5.11/etc/systemd/system/zfs-import-scan.service.in
+@@ -2,7 +2,9 @@
+ Description=Import ZFS pools by device scanning
+ DefaultDependencies=no
+ Requires=systemd-udev-settle.service
++Requires=zfs-load-module.service
+ After=systemd-udev-settle.service
++After=zfs-load-module.service
+ After=cryptsetup.target
+ Before=dracut-mount.service
+ ConditionPathExists=!@sysconfdir@/zfs/zpool.cache
+@@ -10,7 +12,6 @@ ConditionPathExists=!@sysconfdir@/zfs/zp
+ [Service]
+ Type=oneshot
+ RemainAfterExit=yes
+-ExecStartPre=/sbin/modprobe zfs
+ ExecStart=@sbindir@/zpool import -aN -o cachefile=none
+ 
+ [Install]
+Index: zfs-linux-0.6.5.11/etc/systemd/system/Makefile.am
+===================================================================
+--- zfs-linux-0.6.5.11.orig/etc/systemd/system/Makefile.am
++++ zfs-linux-0.6.5.11/etc/systemd/system/Makefile.am
+@@ -2,6 +2,7 @@ systemdpreset_DATA = \
+ 	50-zfs.preset
+ 
+ systemdunit_DATA = \
++	zfs-load-module.service \
+ 	zfs-zed.service \
+ 	zfs-import-cache.service \
+ 	zfs-import-scan.service \
+@@ -10,6 +11,7 @@ systemdunit_DATA = \
+ 	zfs.target
+ 
+ EXTRA_DIST = \
++	$(top_srcdir)/etc/systemd/system/zfs-load-module.service \
+ 	$(top_srcdir)/etc/systemd/system/zfs-zed.service.in \
+ 	$(top_srcdir)/etc/systemd/system/zfs-import-cache.service.in \
+ 	$(top_srcdir)/etc/systemd/system/zfs-import-scan.service.in \
