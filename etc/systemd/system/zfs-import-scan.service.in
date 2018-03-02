@@ -2,7 +2,9 @@
 Description=Import ZFS pools by device scanning
 DefaultDependencies=no
 Requires=systemd-udev-settle.service
+Requires=zfs-load-module.service
 After=systemd-udev-settle.service
+After=zfs-load-module.service
 After=cryptsetup.target
 Before=dracut-mount.service
 ConditionPathExists=!@sysconfdir@/zfs/zpool.cache
@@ -10,7 +12,6 @@ ConditionPathExists=!@sysconfdir@/zfs/zpool.cache
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/sbin/modprobe zfs
 ExecStart=@sbindir@/zpool import -aN -o cachefile=none
 
 [Install]
