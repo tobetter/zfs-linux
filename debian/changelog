@@ -1,3 +1,17 @@
+zfs-linux (0.7.5-1ubuntu4) bionic; urgency=medium
+
+  * Fix up broken systemd service scripts (LP: #1741081)
+    - Remove redundant Requires=zfs-load-module.service from
+      zfs-load-module.service and add missing
+      After=zfs-load-module.service from zfs-import-cache.service
+      and zfs-import-scan.service as suggested by comment #11
+      of bug LP1741081 (kudos to Richard Laager for the suggested
+      fixes).
+  * Fix debian/control XSBC-Original-Maintainer and Maintainer fields
+    - ensure the correct email addresses are set
+
+ -- Colin Ian King <colin.king@canonical.com>  Sat, 3 Mar 2018 13:56:11 +0000
+
 zfs-linux (0.7.5-1ubuntu3) bionic; urgency=medium
 
   * Add new module loading systemd service (LP: #1741081)
