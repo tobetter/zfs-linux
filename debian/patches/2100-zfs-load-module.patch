@@ -2,12 +2,11 @@ Index: zfs-linux-0.7.5/etc/systemd/system/zfs-load-module.service.in
 ===================================================================
 --- /dev/null
 +++ zfs-linux-0.7.5/etc/systemd/system/zfs-load-module.service.in
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,18 @@
 +[Unit]
 +Description=Install ZFS kernel module
 +DefaultDependencies=no
 +Requires=systemd-udev-settle.service
-+Requires=zfs-load-module.service
 +After=systemd-udev-settle.service
 +After=cryptsetup.target
 +Before=dracut-mount.service
@@ -26,15 +25,17 @@ Index: zfs-linux-0.7.5/etc/systemd/system/zfs-import-cache.service.in
 ===================================================================
 --- zfs-linux-0.7.5.orig/etc/systemd/system/zfs-import-cache.service.in
 +++ zfs-linux-0.7.5/etc/systemd/system/zfs-import-cache.service.in
-@@ -3,6 +3,7 @@ Description=Import ZFS pools by cache fi
+@@ -3,7 +3,9 @@ Description=Import ZFS pools by cache fi
  Documentation=man:zpool(8)
  DefaultDependencies=no
  Requires=systemd-udev-settle.service
 +Requires=zfs-load-module.service
  After=systemd-udev-settle.service
++After=zfs-load-module.service
  After=cryptsetup.target
  After=systemd-remount-fs.service
-@@ -13,7 +14,6 @@ ConditionPathExists=@sysconfdir@/zfs/zpo
+ Before=dracut-mount.service
+@@ -13,7 +15,6 @@ ConditionPathExists=@sysconfdir@/zfs/zpo
  [Service]
  Type=oneshot
  RemainAfterExit=yes
@@ -46,15 +47,17 @@ Index: zfs-linux-0.7.5/etc/systemd/system/zfs-import-scan.service.in
 ===================================================================
 --- zfs-linux-0.7.5.orig/etc/systemd/system/zfs-import-scan.service.in
 +++ zfs-linux-0.7.5/etc/systemd/system/zfs-import-scan.service.in
-@@ -3,6 +3,7 @@ Description=Import ZFS pools by device s
+@@ -3,7 +3,9 @@ Description=Import ZFS pools by device s
  Documentation=man:zpool(8)
  DefaultDependencies=no
  Requires=systemd-udev-settle.service
 +Requires=zfs-load-module.service
  After=systemd-udev-settle.service
++After=zfs-load-module.service
  After=cryptsetup.target
  Before=dracut-mount.service
-@@ -12,7 +13,6 @@ ConditionPathExists=!@sysconfdir@/zfs/zp
+ Before=zfs-import.target
+@@ -12,7 +14,6 @@ ConditionPathExists=!@sysconfdir@/zfs/zp
  [Service]
  Type=oneshot
  RemainAfterExit=yes

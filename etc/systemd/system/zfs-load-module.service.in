@@ -2,7 +2,6 @@
 Description=Install ZFS kernel module
 DefaultDependencies=no
 Requires=systemd-udev-settle.service
-Requires=zfs-load-module.service
 After=systemd-udev-settle.service
 After=cryptsetup.target
 Before=dracut-mount.service
