@@ -1,3 +1,14 @@
+zfs-linux (0.7.5-1ubuntu5) bionic; urgency=medium
+
+  * Fix ZFS setgid broken on 0.7 (LP: #1753288)
+    Pull in upstream commit 0e85048f53e4, namely:
+    "Take user namespaces into account in policy checks"
+    - Change file related checks to use user namespaces and make
+      sure involved uids/gids are mappable in the current
+      namespace.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 8 Mar 2018 09:10:00 +0000
+
 zfs-linux (0.7.5-1ubuntu4) bionic; urgency=medium
 
   * Fix up broken systemd service scripts (LP: #1741081)
