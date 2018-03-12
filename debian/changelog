@@ -1,3 +1,12 @@
+zfs-linux (0.7.5-1ubuntu6) bionic; urgency=medium
+
+  * Fix ARC hit rate (LP: #1755158)
+    - Upstream fix, commit 0873bb6337452e3e028e40f5dad945b30deab185,
+      fixes issue that can impact ARC hit rate especially with a
+      small ARC
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 12 Mar 2018 12:40:22 +0000
+
 zfs-linux (0.7.5-1ubuntu5) bionic; urgency=medium
 
   * Fix ZFS setgid broken on 0.7 (LP: #1753288)
