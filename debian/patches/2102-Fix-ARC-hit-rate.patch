@@ -1,0 +1,197 @@
+From 0873bb6337452e3e028e40f5dad945b30deab185 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Mon, 8 Jan 2018 09:52:36 -0800
+Subject: [PATCH] Fix ARC hit rate
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+When the compressed ARC feature was added in commit d3c2ae1
+the method of reference counting in the ARC was modified.  As
+part of this accounting change the arc_buf_add_ref() function
+was removed entirely.
+
+This would have be fine but the arc_buf_add_ref() function
+served a second undocumented purpose of updating the ARC access
+information when taking a hold on a dbuf.  Without this logic
+in place a cached dbuf would not migrate its associated
+arc_buf_hdr_t to the MFU list.  This would negatively impact
+the ARC hit rate, particularly on systems with a small ARC.
+
+This change reinstates the missing call to arc_access() from
+dbuf_hold() by implementing a new arc_buf_access() function.
+
+Reviewed-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Reviewed-by: Tony Hutter <hutter2@llnl.gov>
+Reviewed-by: Tim Chase <tim@chase2k.com>
+Reviewed by: George Wilson <george.wilson@delphix.com>
+Reviewed-by: George Melikov <mail@gmelikov.ru>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Closes #6171
+Closes #6852
+Closes #6989
+
+Index: zfs-linux-0.7.5/include/sys/arc.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/sys/arc.h
++++ zfs-linux-0.7.5/include/sys/arc.h
+@@ -95,35 +95,36 @@ typedef enum arc_flags
+ 	ARC_FLAG_CACHED			= 1 << 3,	/* I/O was in cache */
+ 	ARC_FLAG_L2CACHE		= 1 << 4,	/* cache in L2ARC */
+ 	ARC_FLAG_PREDICTIVE_PREFETCH	= 1 << 5,	/* I/O from zfetch */
++	ARC_FLAG_PRESCIENT_PREFETCH     = 1 << 6,       /* long min lifespan */
+ 
+ 	/*
+ 	 * Private ARC flags.  These flags are private ARC only flags that
+ 	 * will show up in b_flags in the arc_hdr_buf_t. These flags should
+ 	 * only be set by ARC code.
+ 	 */
+-	ARC_FLAG_IN_HASH_TABLE		= 1 << 6,	/* buffer is hashed */
+-	ARC_FLAG_IO_IN_PROGRESS		= 1 << 7,	/* I/O in progress */
+-	ARC_FLAG_IO_ERROR		= 1 << 8,	/* I/O failed for buf */
+-	ARC_FLAG_INDIRECT		= 1 << 9,	/* indirect block */
++	ARC_FLAG_IN_HASH_TABLE		= 1 << 7,	/* buffer is hashed */
++	ARC_FLAG_IO_IN_PROGRESS		= 1 << 8,	/* I/O in progress */
++	ARC_FLAG_IO_ERROR		= 1 << 9,	/* I/O failed for buf */
++	ARC_FLAG_INDIRECT		= 1 << 10,	/* indirect block */
+ 	/* Indicates that block was read with ASYNC priority. */
+-	ARC_FLAG_PRIO_ASYNC_READ	= 1 << 10,
+-	ARC_FLAG_L2_WRITING		= 1 << 11,	/* write in progress */
+-	ARC_FLAG_L2_EVICTED		= 1 << 12,	/* evicted during I/O */
+-	ARC_FLAG_L2_WRITE_HEAD		= 1 << 13,	/* head of write list */
++	ARC_FLAG_PRIO_ASYNC_READ	= 1 << 11,
++	ARC_FLAG_L2_WRITING		= 1 << 12,	/* write in progress */
++	ARC_FLAG_L2_EVICTED		= 1 << 13,	/* evicted during I/O */
++	ARC_FLAG_L2_WRITE_HEAD		= 1 << 14,	/* head of write list */
+ 	/* indicates that the buffer contains metadata (otherwise, data) */
+-	ARC_FLAG_BUFC_METADATA		= 1 << 14,
++	ARC_FLAG_BUFC_METADATA		= 1 << 15,
+ 
+ 	/* Flags specifying whether optional hdr struct fields are defined */
+-	ARC_FLAG_HAS_L1HDR		= 1 << 15,
+-	ARC_FLAG_HAS_L2HDR		= 1 << 16,
++	ARC_FLAG_HAS_L1HDR		= 1 << 16,
++	ARC_FLAG_HAS_L2HDR		= 1 << 17,
+ 
+ 	/*
+ 	 * Indicates the arc_buf_hdr_t's b_pdata matches the on-disk data.
+ 	 * This allows the l2arc to use the blkptr's checksum to verify
+ 	 * the data without having to store the checksum in the hdr.
+ 	 */
+-	ARC_FLAG_COMPRESSED_ARC		= 1 << 17,
+-	ARC_FLAG_SHARED_DATA		= 1 << 18,
++	ARC_FLAG_COMPRESSED_ARC		= 1 << 18,
++	ARC_FLAG_SHARED_DATA		= 1 << 19,
+ 
+ 	/*
+ 	 * The arc buffer's compression mode is stored in the top 7 bits of the
+@@ -221,6 +222,7 @@ void arc_buf_destroy(arc_buf_t *buf, voi
+ void arc_buf_info(arc_buf_t *buf, arc_buf_info_t *abi, int state_index);
+ uint64_t arc_buf_size(arc_buf_t *buf);
+ uint64_t arc_buf_lsize(arc_buf_t *buf);
++void arc_buf_access(arc_buf_t *buf);
+ void arc_release(arc_buf_t *buf, void *tag);
+ int arc_released(arc_buf_t *buf);
+ void arc_buf_sigsegv(int sig, siginfo_t *si, void *unused);
+Index: zfs-linux-0.7.5/module/zfs/arc.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/arc.c
++++ zfs-linux-0.7.5/module/zfs/arc.c
+@@ -430,8 +430,13 @@ typedef struct arc_stats {
+ 	 */
+ 	kstat_named_t arcstat_mutex_miss;
+ 	/*
++	 * Number of buffers skipped when updating the access state due to the
++	 * header having already been released after acquiring the hash lock.
++	 */
++	kstat_named_t arcstat_access_skip;
++	/*
+ 	 * Number of buffers skipped because they have I/O in progress, are
+-	 * indrect prefetch buffers that have not lived long enough, or are
++	 * indirect prefetch buffers that have not lived long enough, or are
+ 	 * not from the spa we're trying to evict from.
+ 	 */
+ 	kstat_named_t arcstat_evict_skip;
+@@ -667,6 +672,7 @@ static arc_stats_t arc_stats = {
+ 	{ "mfu_ghost_hits",		KSTAT_DATA_UINT64 },
+ 	{ "deleted",			KSTAT_DATA_UINT64 },
+ 	{ "mutex_miss",			KSTAT_DATA_UINT64 },
++	{ "access_skip",		KSTAT_DATA_UINT64 },
+ 	{ "evict_skip",			KSTAT_DATA_UINT64 },
+ 	{ "evict_not_enough",		KSTAT_DATA_UINT64 },
+ 	{ "evict_l2_cached",		KSTAT_DATA_UINT64 },
+@@ -840,6 +846,8 @@ static taskq_t *arc_prune_taskq;
+ #define	HDR_IO_IN_PROGRESS(hdr)	((hdr)->b_flags & ARC_FLAG_IO_IN_PROGRESS)
+ #define	HDR_IO_ERROR(hdr)	((hdr)->b_flags & ARC_FLAG_IO_ERROR)
+ #define	HDR_PREFETCH(hdr)	((hdr)->b_flags & ARC_FLAG_PREFETCH)
++#define HDR_PRESCIENT_PREFETCH(hdr)     \
++	((hdr)->b_flags & ARC_FLAG_PRESCIENT_PREFETCH)
+ #define	HDR_COMPRESSION_ENABLED(hdr)	\
+ 	((hdr)->b_flags & ARC_FLAG_COMPRESSED_ARC)
+ 
+@@ -4926,6 +4934,50 @@ arc_access(arc_buf_hdr_t *hdr, kmutex_t
+ 	}
+ }
+ 
++/*
++ * This routine is called by dbuf_hold() to update the arc_access() state
++ * which otherwise would be skipped for entries in the dbuf cache.
++ */
++void
++arc_buf_access(arc_buf_t *buf)
++{
++	mutex_enter(&buf->b_evict_lock);
++	arc_buf_hdr_t *hdr = buf->b_hdr;
++
++	/*
++	 * Avoid taking the hash_lock when possible as an optimization.
++	 * The header must be checked again under the hash_lock in order
++	 * to handle the case where it is concurrently being released.
++	 */
++	if (hdr->b_l1hdr.b_state == arc_anon || HDR_EMPTY(hdr)) {
++		mutex_exit(&buf->b_evict_lock);
++		return;
++	}
++
++	kmutex_t *hash_lock = HDR_LOCK(hdr);
++	mutex_enter(hash_lock);
++
++	if (hdr->b_l1hdr.b_state == arc_anon || HDR_EMPTY(hdr)) {
++		mutex_exit(hash_lock);
++		mutex_exit(&buf->b_evict_lock);
++		ARCSTAT_BUMP(arcstat_access_skip);
++		return;
++	}
++
++	mutex_exit(&buf->b_evict_lock);
++
++	ASSERT(hdr->b_l1hdr.b_state == arc_mru ||
++	    hdr->b_l1hdr.b_state == arc_mfu);
++
++	DTRACE_PROBE1(arc__hit, arc_buf_hdr_t *, hdr);
++	arc_access(hdr, hash_lock);
++	mutex_exit(hash_lock);
++
++	ARCSTAT_BUMP(arcstat_hits);
++	ARCSTAT_CONDSTAT(!HDR_PREFETCH(hdr) && !HDR_PRESCIENT_PREFETCH(hdr),
++	    demand, prefetch, !HDR_ISTYPE_METADATA(hdr), data, metadata, hits);
++}
++
+ /* a generic arc_done_func_t which you can use */
+ /* ARGSUSED */
+ void
+Index: zfs-linux-0.7.5/module/zfs/dbuf.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/dbuf.c
++++ zfs-linux-0.7.5/module/zfs/dbuf.c
+@@ -2719,8 +2719,10 @@ __dbuf_hold_impl(struct dbuf_hold_impl_d
+ 		return (SET_ERROR(ENOENT));
+ 	}
+ 
+-	if (dh->dh_db->db_buf != NULL)
++	if (dh->dh_db->db_buf != NULL) {
++		arc_buf_access(dh->dh_db->db_buf);
+ 		ASSERT3P(dh->dh_db->db.db_data, ==, dh->dh_db->db_buf->b_data);
++	}
+ 
+ 	ASSERT(dh->dh_db->db_buf == NULL || arc_referenced(dh->dh_db->db_buf));
+ 

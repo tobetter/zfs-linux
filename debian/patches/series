@@ -11,3 +11,4 @@ enable-zed.patch
 2000-increase-default-zcmd-allocation-to-256K.patch
 2100-zfs-load-module.patch
 2101-Take-user-namespaces-into-account-in-policy-checks.patch
+2102-Fix-ARC-hit-rate.patch
