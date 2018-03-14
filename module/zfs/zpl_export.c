@@ -37,7 +37,6 @@ zpl_encode_fh(struct inode *ip, __u32 *fh, int *max_len, struct inode *parent)
 #else
 zpl_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len, int connectable)
 {
-	/* CSTYLED */
 	struct inode *ip = dentry->d_inode;
 #endif /* HAVE_ENCODE_FH_WITH_INODE */
 	fstrans_cookie_t cookie;
@@ -103,21 +102,8 @@ zpl_fh_to_dentry(struct super_block *sb, struct fid *fh,
 	rc = zfs_vget(sb, &ip, fid);
 	spl_fstrans_unmark(cookie);
 
-	if (rc) {
-		/*
-		 * If we see ENOENT it might mean that an NFSv4 * client
-		 * is using a cached inode value in a file handle and
-		 * that the sought after file has had its inode changed
-		 * by a third party.  So change the error to ESTALE
-		 * which will trigger a full lookup by the client and
-		 * will find the new filename/inode pair if it still
-		 * exists.
-		 */
-		if (rc == ENOENT)
-			rc = ESTALE;
-
+	if (rc != 0)
 		return (ERR_PTR(-rc));
-	}
 
 	ASSERT((ip != NULL) && !IS_ERR(ip));
 
@@ -152,9 +138,6 @@ zpl_commit_metadata(struct inode *inode)
 	cred_t *cr = CRED();
 	fstrans_cookie_t cookie;
 	int error;
-
-	if (zfsctl_is_node(inode))
-		return (0);
 
 	crhold(cr);
 	cookie = spl_fstrans_mark();

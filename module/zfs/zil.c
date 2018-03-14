@@ -20,8 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2011, 2017 by Delphix. All rights reserved.
- * Copyright (c) 2014 Integros [integros.com]
+ * Copyright (c) 2011, 2014 by Delphix. All rights reserved.
  */
 
 /* Portions Copyright 2010 Robert Milkowski */
@@ -41,7 +40,6 @@
 #include <sys/dsl_pool.h>
 #include <sys/metaslab.h>
 #include <sys/trace_zil.h>
-#include <sys/abd.h>
 
 /*
  * The zfs intent log (ZIL) saves transaction records of system calls
@@ -102,13 +100,6 @@ int zil_replay_disable = 0;
  */
 int zfs_nocacheflush = 0;
 
-/*
- * Limit SLOG write size per commit executed with synchronous priority.
- * Any writes above that will be executed with lower (asynchronous) priority
- * to limit potential SLOG device abuse by single active ZIL writer.
- */
-unsigned long zil_slog_bulk = 768 * 1024;
-
 static kmem_cache_t *zil_lwb_cache;
 
 static void zil_async_to_sync(zilog_t *zilog, uint64_t foid);
@@ -116,17 +107,33 @@ static void zil_async_to_sync(zilog_t *zilog, uint64_t foid);
 #define	LWB_EMPTY(lwb) ((BP_GET_LSIZE(&lwb->lwb_blk) - \
     sizeof (zil_chain_t)) == (lwb->lwb_sz - lwb->lwb_nused))
 
+
+/*
+ * ziltest is by and large an ugly hack, but very useful in
+ * checking replay without tedious work.
+ * When running ziltest we want to keep all itx's and so maintain
+ * a single list in the zl_itxg[] that uses a high txg: ZILTEST_TXG
+ * We subtract TXG_CONCURRENT_STATES to allow for common code.
+ */
+#define	ZILTEST_TXG (UINT64_MAX - TXG_CONCURRENT_STATES)
+
 static int
 zil_bp_compare(const void *x1, const void *x2)
 {
 	const dva_t *dva1 = &((zil_bp_node_t *)x1)->zn_dva;
 	const dva_t *dva2 = &((zil_bp_node_t *)x2)->zn_dva;
 
-	int cmp = AVL_CMP(DVA_GET_VDEV(dva1), DVA_GET_VDEV(dva2));
-	if (likely(cmp))
-		return (cmp);
+	if (DVA_GET_VDEV(dva1) < DVA_GET_VDEV(dva2))
+		return (-1);
+	if (DVA_GET_VDEV(dva1) > DVA_GET_VDEV(dva2))
+		return (1);
 
-	return (AVL_CMP(DVA_GET_OFFSET(dva1), DVA_GET_OFFSET(dva2)));
+	if (DVA_GET_OFFSET(dva1) < DVA_GET_OFFSET(dva2))
+		return (-1);
+	if (DVA_GET_OFFSET(dva1) > DVA_GET_OFFSET(dva2))
+		return (1);
+
+	return (0);
 }
 
 static void
@@ -197,7 +204,7 @@ zil_read_log_block(zilog_t *zilog, const blkptr_t *bp, blkptr_t *nbp, void *dst,
     char **end)
 {
 	enum zio_flag zio_flags = ZIO_FLAG_CANFAIL;
-	arc_flags_t aflags = ARC_FLAG_WAIT;
+	uint32_t aflags = ARC_WAIT;
 	arc_buf_t *abuf = NULL;
 	zbookmark_phys_t zb;
 	int error;
@@ -236,7 +243,6 @@ zil_read_log_block(zilog_t *zilog, const blkptr_t *bp, blkptr_t *nbp, void *dst,
 			    sizeof (cksum)) || BP_IS_HOLE(&zilc->zc_next_blk)) {
 				error = SET_ERROR(ECKSUM);
 			} else {
-				ASSERT3U(len, <=, SPA_OLD_MAXBLOCKSIZE);
 				bcopy(lr, dst, len);
 				*end = (char *)dst + len;
 				*nbp = zilc->zc_next_blk;
@@ -251,15 +257,13 @@ zil_read_log_block(zilog_t *zilog, const blkptr_t *bp, blkptr_t *nbp, void *dst,
 			    (zilc->zc_nused > (size - sizeof (*zilc)))) {
 				error = SET_ERROR(ECKSUM);
 			} else {
-				ASSERT3U(zilc->zc_nused, <=,
-				    SPA_OLD_MAXBLOCKSIZE);
 				bcopy(lr, dst, zilc->zc_nused);
 				*end = (char *)dst + zilc->zc_nused;
 				*nbp = zilc->zc_next_blk;
 			}
 		}
 
-		arc_buf_destroy(abuf, &abuf);
+		VERIFY(arc_buf_remove_ref(abuf, &abuf));
 	}
 
 	return (error);
@@ -273,7 +277,7 @@ zil_read_log_data(zilog_t *zilog, const lr_write_t *lr, void *wbuf)
 {
 	enum zio_flag zio_flags = ZIO_FLAG_CANFAIL;
 	const blkptr_t *bp = &lr->lr_blkptr;
-	arc_flags_t aflags = ARC_FLAG_WAIT;
+	uint32_t aflags = ARC_WAIT;
 	arc_buf_t *abuf = NULL;
 	zbookmark_phys_t zb;
 	int error;
@@ -296,7 +300,7 @@ zil_read_log_data(zilog_t *zilog, const lr_write_t *lr, void *wbuf)
 	if (error == 0) {
 		if (wbuf != NULL)
 			bcopy(abuf->b_data, wbuf, arc_buf_size(abuf));
-		arc_buf_destroy(abuf, &abuf);
+		(void) arc_buf_remove_ref(abuf, &abuf);
 	}
 
 	return (error);
@@ -338,7 +342,7 @@ zil_parse(zilog_t *zilog, zil_parse_blk_func_t *parse_blk_func,
 	 * If the log has been claimed, stop if we encounter a sequence
 	 * number greater than the highest claimed sequence number.
 	 */
-	lrbuf = zio_buf_alloc(SPA_OLD_MAXBLOCKSIZE);
+	lrbuf = zio_buf_alloc(SPA_MAXBLOCKSIZE);
 	zil_bp_tree_init(zilog);
 
 	for (blk = zh->zh_log; !BP_IS_HOLE(&blk); blk = next_blk) {
@@ -385,7 +389,7 @@ done:
 	    (max_blk_seq == claim_blk_seq && max_lr_seq == claim_lr_seq));
 
 	zil_bp_tree_fini(zilog);
-	zio_buf_free(lrbuf, SPA_OLD_MAXBLOCKSIZE);
+	zio_buf_free(lrbuf, SPA_MAXBLOCKSIZE);
 
 	return (error);
 }
@@ -456,8 +460,7 @@ zil_free_log_record(zilog_t *zilog, lr_t *lrc, void *tx, uint64_t claim_txg)
 }
 
 static lwb_t *
-zil_alloc_lwb(zilog_t *zilog, blkptr_t *bp, boolean_t slog, uint64_t txg,
-    boolean_t fastwrite)
+zil_alloc_lwb(zilog_t *zilog, blkptr_t *bp, uint64_t txg, boolean_t fastwrite)
 {
 	lwb_t *lwb;
 
@@ -465,7 +468,6 @@ zil_alloc_lwb(zilog_t *zilog, blkptr_t *bp, boolean_t slog, uint64_t txg,
 	lwb->lwb_zilog = zilog;
 	lwb->lwb_blk = *bp;
 	lwb->lwb_fastwrite = fastwrite;
-	lwb->lwb_slog = slog;
 	lwb->lwb_buf = zio_buf_alloc(BP_GET_LSIZE(bp));
 	lwb->lwb_max_txg = txg;
 	lwb->lwb_zio = NULL;
@@ -495,7 +497,7 @@ zilog_dirty(zilog_t *zilog, uint64_t txg)
 	dsl_pool_t *dp = zilog->zl_dmu_pool;
 	dsl_dataset_t *ds = dmu_objset_ds(zilog->zl_os);
 
-	if (ds->ds_is_snapshot)
+	if (dsl_dataset_is_snapshot(ds))
 		panic("dirtying snapshot!");
 
 	if (txg_list_add(&dp->dp_dirty_zilogs, zilog, txg)) {
@@ -504,27 +506,6 @@ zilog_dirty(zilog_t *zilog, uint64_t txg)
 	}
 }
 
-/*
- * Determine if the zil is dirty in the specified txg. Callers wanting to
- * ensure that the dirty state does not change must hold the itxg_lock for
- * the specified txg. Holding the lock will ensure that the zil cannot be
- * dirtied (zil_itx_assign) or cleaned (zil_clean) while we check its current
- * state.
- */
-boolean_t
-zilog_is_dirty_in_txg(zilog_t *zilog, uint64_t txg)
-{
-	dsl_pool_t *dp = zilog->zl_dmu_pool;
-
-	if (txg_list_member(&dp->dp_dirty_zilogs, zilog, txg & TXG_MASK))
-		return (B_TRUE);
-	return (B_FALSE);
-}
-
-/*
- * Determine if the zil is dirty. The zil is considered dirty if it has
- * any pending itx records that have not been cleaned by zil_clean().
- */
 boolean_t
 zilog_is_dirty(zilog_t *zilog)
 {
@@ -551,7 +532,6 @@ zil_create(zilog_t *zilog)
 	blkptr_t blk;
 	int error = 0;
 	boolean_t fastwrite = FALSE;
-	boolean_t slog = FALSE;
 
 	/*
 	 * Wait for any previous destroy to complete.
@@ -566,7 +546,7 @@ zil_create(zilog_t *zilog)
 	/*
 	 * Allocate an initial log block if:
 	 *    - there isn't one already
-	 *    - the existing block is the wrong endianness
+	 *    - the existing block is the wrong endianess
 	 */
 	if (BP_IS_HOLE(&blk) || BP_SHOULD_BYTESWAP(&blk)) {
 		tx = dmu_tx_create(zilog->zl_os);
@@ -580,7 +560,7 @@ zil_create(zilog_t *zilog)
 		}
 
 		error = zio_alloc_zil(zilog->zl_spa, txg, &blk,
-		    ZIL_MIN_BLKSZ, &slog);
+		    ZIL_MIN_BLKSZ, B_TRUE);
 		fastwrite = TRUE;
 
 		if (error == 0)
@@ -591,7 +571,7 @@ zil_create(zilog_t *zilog)
 	 * Allocate a log write buffer (lwb) for the first log block.
 	 */
 	if (error == 0)
-		lwb = zil_alloc_lwb(zilog, &blk, slog, txg, fastwrite);
+		lwb = zil_alloc_lwb(zilog, &blk, txg, fastwrite);
 
 	/*
 	 * If we just allocated the first log block, commit our transaction
@@ -677,7 +657,7 @@ zil_destroy_sync(zilog_t *zilog, dmu_tx_t *tx)
 }
 
 int
-zil_claim(dsl_pool_t *dp, dsl_dataset_t *ds, void *txarg)
+zil_claim(const char *osname, void *txarg)
 {
 	dmu_tx_t *tx = txarg;
 	uint64_t first_txg = dmu_tx_get_txg(tx);
@@ -686,16 +666,15 @@ zil_claim(dsl_pool_t *dp, dsl_dataset_t *ds, void *txarg)
 	objset_t *os;
 	int error;
 
-	error = dmu_objset_own_obj(dp, ds->ds_object,
-	    DMU_OST_ANY, B_FALSE, FTAG, &os);
+	error = dmu_objset_own(osname, DMU_OST_ANY, B_FALSE, FTAG, &os);
 	if (error != 0) {
 		/*
 		 * EBUSY indicates that the objset is inconsistent, in which
 		 * case it can not have a ZIL.
 		 */
 		if (error != EBUSY) {
-			cmn_err(CE_WARN, "can't open objset for %llu, error %u",
-			    (unsigned long long)ds->ds_object, error);
+			cmn_err(CE_WARN, "can't open objset for %s, error %u",
+				osname, error);
 		}
 
 		return (0);
@@ -743,9 +722,8 @@ zil_claim(dsl_pool_t *dp, dsl_dataset_t *ds, void *txarg)
  * Checksum errors are ok as they indicate the end of the chain.
  * Any other error (no device or read failure) returns an error.
  */
-/* ARGSUSED */
 int
-zil_check_log_chain(dsl_pool_t *dp, dsl_dataset_t *ds, void *tx)
+zil_check_log_chain(const char *osname, void *tx)
 {
 	zilog_t *zilog;
 	objset_t *os;
@@ -754,10 +732,9 @@ zil_check_log_chain(dsl_pool_t *dp, dsl_dataset_t *ds, void *tx)
 
 	ASSERT(tx == NULL);
 
-	error = dmu_objset_from_ds(ds, &os);
+	error = dmu_objset_hold(osname, FTAG, &os);
 	if (error != 0) {
-		cmn_err(CE_WARN, "can't open objset %llu, error %d",
-		    (unsigned long long)ds->ds_object, error);
+		cmn_err(CE_WARN, "can't open objset for %s", osname);
 		return (0);
 	}
 
@@ -780,8 +757,10 @@ zil_check_log_chain(dsl_pool_t *dp, dsl_dataset_t *ds, void *tx)
 			valid = vdev_log_state_valid(vd);
 		spa_config_exit(os->os_spa, SCL_STATE, FTAG);
 
-		if (!valid)
+		if (!valid) {
+			dmu_objset_rele(os, FTAG);
 			return (0);
+		}
 	}
 
 	/*
@@ -794,6 +773,8 @@ zil_check_log_chain(dsl_pool_t *dp, dsl_dataset_t *ds, void *tx)
 	error = zil_parse(zilog, zil_claim_log_block, zil_claim_log_record, tx,
 	    zilog->zl_header->zh_claim_txg ? -1ULL : spa_first_txg(os->os_spa));
 
+	dmu_objset_rele(os, FTAG);
+
 	return ((error == ECKSUM || error == ENOENT) ? 0 : error);
 }
 
@@ -803,7 +784,12 @@ zil_vdev_compare(const void *x1, const void *x2)
 	const uint64_t v1 = ((zil_vdev_node_t *)x1)->zv_vdev;
 	const uint64_t v2 = ((zil_vdev_node_t *)x2)->zv_vdev;
 
-	return (AVL_CMP(v1, v2));
+	if (v1 < v2)
+		return (-1);
+	if (v1 > v2)
+		return (1);
+
+	return (0);
 }
 
 void
@@ -901,7 +887,6 @@ zil_lwb_write_done(zio_t *zio)
 	 * one in zil_commit_writer(). zil_sync() will only remove
 	 * the lwb if lwb_buf is null.
 	 */
-	abd_put(zio->io_abd);
 	zio_buf_free(lwb->lwb_buf, lwb->lwb_sz);
 	mutex_enter(&zilog->zl_lock);
 	lwb->lwb_zio = NULL;
@@ -925,7 +910,6 @@ static void
 zil_lwb_write_init(zilog_t *zilog, lwb_t *lwb)
 {
 	zbookmark_phys_t zb;
-	zio_priority_t prio;
 
 	SET_BOOKMARK(&zb, lwb->lwb_blk.blk_cksum.zc_word[ZIL_ZC_OBJSET],
 	    ZB_ZIL_OBJECT, ZB_ZIL_LEVEL,
@@ -939,19 +923,13 @@ zil_lwb_write_init(zilog_t *zilog, lwb_t *lwb)
 	/* Lock so zil_sync() doesn't fastwrite_unmark after zio is created */
 	mutex_enter(&zilog->zl_lock);
 	if (lwb->lwb_zio == NULL) {
-		abd_t *lwb_abd = abd_get_from_buf(lwb->lwb_buf,
-		    BP_GET_LSIZE(&lwb->lwb_blk));
 		if (!lwb->lwb_fastwrite) {
 			metaslab_fastwrite_mark(zilog->zl_spa, &lwb->lwb_blk);
 			lwb->lwb_fastwrite = 1;
 		}
-		if (!lwb->lwb_slog || zilog->zl_cur_used <= zil_slog_bulk)
-			prio = ZIO_PRIORITY_SYNC_WRITE;
-		else
-			prio = ZIO_PRIORITY_ASYNC_WRITE;
 		lwb->lwb_zio = zio_rewrite(zilog->zl_root_zio, zilog->zl_spa,
-		    0, &lwb->lwb_blk, lwb_abd, BP_GET_LSIZE(&lwb->lwb_blk),
-		    zil_lwb_write_done, lwb, prio,
+		    0, &lwb->lwb_blk, lwb->lwb_buf, BP_GET_LSIZE(&lwb->lwb_blk),
+		    zil_lwb_write_done, lwb, ZIO_PRIORITY_SYNC_WRITE,
 		    ZIO_FLAG_CANFAIL | ZIO_FLAG_DONT_PROPAGATE |
 		    ZIO_FLAG_FASTWRITE, &zb);
 	}
@@ -963,7 +941,7 @@ zil_lwb_write_init(zilog_t *zilog, lwb_t *lwb)
  *
  * These must be a multiple of 4KB. Note only the amount used (again
  * aligned to 4KB) actually gets written. However, we can't always just
- * allocate SPA_OLD_MAXBLOCKSIZE as the slog space could be exhausted.
+ * allocate SPA_MAXBLOCKSIZE as the slog space could be exhausted.
  */
 uint64_t zil_block_buckets[] = {
     4096,		/* non TX_WRITE */
@@ -971,6 +949,15 @@ uint64_t zil_block_buckets[] = {
     32*1024 + 4096, 	/* NFS writes */
     UINT64_MAX
 };
+
+/*
+ * Use the slog as long as the current commit size is less than the
+ * limit or the total list size is less than 2X the limit.  Limit
+ * checking is disabled by setting zil_slog_limit to UINT64_MAX.
+ */
+unsigned long zil_slog_limit = 1024 * 1024;
+#define	USE_SLOG(zilog) (((zilog)->zl_cur_used < zil_slog_limit) || \
+	((zilog)->zl_itx_list_sz < (zil_slog_limit << 1)))
 
 /*
  * Start a log block write and advance to the next log block.
@@ -987,7 +974,7 @@ zil_lwb_write_start(zilog_t *zilog, lwb_t *lwb)
 	uint64_t txg;
 	uint64_t zil_blksz, wsz;
 	int i, error;
-	boolean_t slog;
+	boolean_t use_slog;
 
 	if (BP_GET_CHECKSUM(&lwb->lwb_blk) == ZIO_CHECKSUM_ZILOG2) {
 		zilc = (zil_chain_t *)lwb->lwb_buf;
@@ -1036,15 +1023,17 @@ zil_lwb_write_start(zilog_t *zilog, lwb_t *lwb)
 		continue;
 	zil_blksz = zil_block_buckets[i];
 	if (zil_blksz == UINT64_MAX)
-		zil_blksz = SPA_OLD_MAXBLOCKSIZE;
+		zil_blksz = SPA_MAXBLOCKSIZE;
 	zilog->zl_prev_blks[zilog->zl_prev_rotor] = zil_blksz;
 	for (i = 0; i < ZIL_PREV_BLKS; i++)
 		zil_blksz = MAX(zil_blksz, zilog->zl_prev_blks[i]);
 	zilog->zl_prev_rotor = (zilog->zl_prev_rotor + 1) & (ZIL_PREV_BLKS - 1);
 
 	BP_ZERO(bp);
-	error = zio_alloc_zil(spa, txg, bp, zil_blksz, &slog);
-	if (slog) {
+	use_slog = USE_SLOG(zilog);
+	error = zio_alloc_zil(spa, txg, bp, zil_blksz,
+	    USE_SLOG(zilog));
+	if (use_slog) {
 		ZIL_STAT_BUMP(zil_itx_metaslab_slog_count);
 		ZIL_STAT_INCR(zil_itx_metaslab_slog_bytes, lwb->lwb_nused);
 	} else {
@@ -1059,7 +1048,7 @@ zil_lwb_write_start(zilog_t *zilog, lwb_t *lwb)
 		/*
 		 * Allocate a new log write buffer (lwb).
 		 */
-		nlwb = zil_alloc_lwb(zilog, bp, slog, txg, TRUE);
+		nlwb = zil_alloc_lwb(zilog, bp, txg, TRUE);
 
 		/* Record the block for later vdev flushing */
 		zil_add_block(zilog, &lwb->lwb_blk);
@@ -1096,53 +1085,47 @@ zil_lwb_write_start(zilog_t *zilog, lwb_t *lwb)
 static lwb_t *
 zil_lwb_commit(zilog_t *zilog, itx_t *itx, lwb_t *lwb)
 {
-	lr_t *lrcb, *lrc;
-	lr_write_t *lrwb, *lrw;
+	lr_t *lrc = &itx->itx_lr; /* common log record */
+	lr_write_t *lrw = (lr_write_t *)lrc;
 	char *lr_buf;
-	uint64_t dlen, dnow, lwb_sp, reclen, txg;
+	uint64_t txg = lrc->lrc_txg;
+	uint64_t reclen = lrc->lrc_reclen;
+	uint64_t dlen = 0;
 
 	if (lwb == NULL)
 		return (NULL);
 
 	ASSERT(lwb->lwb_buf != NULL);
+	ASSERT(zilog_is_dirty(zilog) ||
+	    spa_freeze_txg(zilog->zl_spa) != UINT64_MAX);
 
-	lrc = &itx->itx_lr;		/* Common log record inside itx. */
-	lrw = (lr_write_t *)lrc;	/* Write log record inside itx. */
-	if (lrc->lrc_txtype == TX_WRITE && itx->itx_wr_state == WR_NEED_COPY) {
+	if (lrc->lrc_txtype == TX_WRITE && itx->itx_wr_state == WR_NEED_COPY)
 		dlen = P2ROUNDUP_TYPED(
 		    lrw->lr_length, sizeof (uint64_t), uint64_t);
-	} else {
-		dlen = 0;
-	}
-	reclen = lrc->lrc_reclen;
+
 	zilog->zl_cur_used += (reclen + dlen);
-	txg = lrc->lrc_txg;
 
 	zil_lwb_write_init(zilog, lwb);
 
-cont:
 	/*
 	 * If this record won't fit in the current log block, start a new one.
-	 * For WR_NEED_COPY optimize layout for minimal number of chunks.
 	 */
-	lwb_sp = lwb->lwb_sz - lwb->lwb_nused;
-	if (reclen > lwb_sp || (reclen + dlen > lwb_sp &&
-	    lwb_sp < ZIL_MAX_WASTE_SPACE && (dlen % ZIL_MAX_LOG_DATA == 0 ||
-	    lwb_sp < reclen + dlen % ZIL_MAX_LOG_DATA))) {
+	if (lwb->lwb_nused + reclen + dlen > lwb->lwb_sz) {
 		lwb = zil_lwb_write_start(zilog, lwb);
 		if (lwb == NULL)
 			return (NULL);
 		zil_lwb_write_init(zilog, lwb);
 		ASSERT(LWB_EMPTY(lwb));
-		lwb_sp = lwb->lwb_sz - lwb->lwb_nused;
-		ASSERT3U(reclen + MIN(dlen, sizeof (uint64_t)), <=, lwb_sp);
+		if (lwb->lwb_nused + reclen + dlen > lwb->lwb_sz) {
+			txg_wait_synced(zilog->zl_dmu_pool, txg);
+			return (lwb);
+		}
 	}
 
-	dnow = MIN(dlen, lwb_sp - reclen);
 	lr_buf = lwb->lwb_buf + lwb->lwb_nused;
 	bcopy(lrc, lr_buf, reclen);
-	lrcb = (lr_t *)lr_buf;		/* Like lrc, but inside lwb. */
-	lrwb = (lr_write_t *)lrcb;	/* Like lrw, but inside lwb. */
+	lrc = (lr_t *)lr_buf;
+	lrw = (lr_write_t *)lrc;
 
 	ZIL_STAT_BUMP(zil_itx_count);
 
@@ -1159,13 +1142,10 @@ cont:
 			char *dbuf;
 			int error;
 
-			if (itx->itx_wr_state == WR_NEED_COPY) {
+			if (dlen) {
+				ASSERT(itx->itx_wr_state == WR_NEED_COPY);
 				dbuf = lr_buf + reclen;
-				lrcb->lrc_reclen += dnow;
-				if (lrwb->lr_length > dnow)
-					lrwb->lr_length = dnow;
-				lrw->lr_offset += dnow;
-				lrw->lr_length -= dnow;
+				lrw->lr_common.lrc_reclen += dlen;
 				ZIL_STAT_BUMP(zil_itx_needcopy_count);
 				ZIL_STAT_INCR(zil_itx_needcopy_bytes,
 				    lrw->lr_length);
@@ -1177,7 +1157,7 @@ cont:
 				    lrw->lr_length);
 			}
 			error = zilog->zl_get_data(
-			    itx->itx_private, lrwb, dbuf, lwb->lwb_zio);
+			    itx->itx_private, lrw, dbuf, lwb->lwb_zio);
 			if (error == EIO) {
 				txg_wait_synced(zilog->zl_dmu_pool, txg);
 				return (lwb);
@@ -1196,17 +1176,11 @@ cont:
 	 * equal to the itx sequence number because not all transactions
 	 * are synchronous, and sometimes spa_sync() gets there first.
 	 */
-	lrcb->lrc_seq = ++zilog->zl_lr_seq; /* we are single threaded */
-	lwb->lwb_nused += reclen + dnow;
+	lrc->lrc_seq = ++zilog->zl_lr_seq; /* we are single threaded */
+	lwb->lwb_nused += reclen + dlen;
 	lwb->lwb_max_txg = MAX(lwb->lwb_max_txg, txg);
 	ASSERT3U(lwb->lwb_nused, <=, lwb->lwb_sz);
 	ASSERT0(P2PHASE(lwb->lwb_nused, sizeof (uint64_t)));
-
-	dlen -= dnow;
-	if (dlen > 0) {
-		zilog->zl_cur_used += reclen;
-		goto cont;
-	}
 
 	return (lwb);
 }
@@ -1214,20 +1188,18 @@ cont:
 itx_t *
 zil_itx_create(uint64_t txtype, size_t lrsize)
 {
-	size_t itxsize;
 	itx_t *itx;
 
 	lrsize = P2ROUNDUP_TYPED(lrsize, sizeof (uint64_t), size_t);
-	itxsize = offsetof(itx_t, itx_lr) + lrsize;
 
-	itx = zio_data_buf_alloc(itxsize);
+	itx = zio_data_buf_alloc(offsetof(itx_t, itx_lr) + lrsize);
 	itx->itx_lr.lrc_txtype = txtype;
 	itx->itx_lr.lrc_reclen = lrsize;
+	itx->itx_sod = lrsize; /* if write & WR_NEED_COPY will be increased */
 	itx->itx_lr.lrc_seq = 0;	/* defensive */
 	itx->itx_sync = B_TRUE;		/* default is synchronous */
 	itx->itx_callback = NULL;
 	itx->itx_callback_data = NULL;
-	itx->itx_size = itxsize;
 
 	return (itx);
 }
@@ -1235,7 +1207,7 @@ zil_itx_create(uint64_t txtype, size_t lrsize)
 void
 zil_itx_destroy(itx_t *itx)
 {
-	zio_data_buf_free(itx, itx->itx_size);
+	zio_data_buf_free(itx, offsetof(itx_t, itx_lr)+itx->itx_lr.lrc_reclen);
 }
 
 /*
@@ -1283,7 +1255,12 @@ zil_aitx_compare(const void *x1, const void *x2)
 	const uint64_t o1 = ((itx_async_node_t *)x1)->ia_foid;
 	const uint64_t o2 = ((itx_async_node_t *)x2)->ia_foid;
 
-	return (AVL_CMP(o1, o2));
+	if (o1 < o2)
+		return (-1);
+	if (o1 > o2)
+		return (1);
+
+	return (0);
 }
 
 /*
@@ -1372,10 +1349,11 @@ zil_itx_assign(zilog_t *zilog, itx_t *itx, dmu_tx_t *tx)
 			 * this itxg. Save the itxs for release below.
 			 * This should be rare.
 			 */
-			zfs_dbgmsg("zil_itx_assign: missed itx cleanup for "
-			    "txg %llu", itxg->itxg_txg);
+			atomic_add_64(&zilog->zl_itx_list_sz, -itxg->itxg_sod);
+			itxg->itxg_sod = 0;
 			clean = itxg->itxg_itxs;
 		}
+		ASSERT(itxg->itxg_sod == 0);
 		itxg->itxg_txg = txg;
 		itxs = itxg->itxg_itxs = kmem_zalloc(sizeof (itxs_t),
 		    KM_SLEEP);
@@ -1388,10 +1366,11 @@ zil_itx_assign(zilog_t *zilog, itx_t *itx, dmu_tx_t *tx)
 	}
 	if (itx->itx_sync) {
 		list_insert_tail(&itxs->i_sync_list, itx);
+		atomic_add_64(&zilog->zl_itx_list_sz, itx->itx_sod);
+		itxg->itxg_sod += itx->itx_sod;
 	} else {
 		avl_tree_t *t = &itxs->i_async_tree;
-		uint64_t foid =
-		    LR_FOID_GET_OBJ(((lr_ooo_t *)&itx->itx_lr)->lr_foid);
+		uint64_t foid = ((lr_ooo_t *)&itx->itx_lr)->lr_foid;
 		itx_async_node_t *ian;
 		avl_index_t where;
 
@@ -1437,6 +1416,8 @@ zil_clean(zilog_t *zilog, uint64_t synced_txg)
 	ASSERT3U(itxg->itxg_txg, <=, synced_txg);
 	ASSERT(itxg->itxg_txg != 0);
 	ASSERT(zilog->zl_clean_taskq != NULL);
+	atomic_add_64(&zilog->zl_itx_list_sz, -itxg->itxg_sod);
+	itxg->itxg_sod = 0;
 	clean_me = itxg->itxg_itxs;
 	itxg->itxg_itxs = NULL;
 	itxg->itxg_txg = 0;
@@ -1460,17 +1441,13 @@ zil_get_commit_list(zilog_t *zilog)
 {
 	uint64_t otxg, txg;
 	list_t *commit_list = &zilog->zl_itx_commit_list;
+	uint64_t push_sod = 0;
 
 	if (spa_freeze_txg(zilog->zl_spa) != UINT64_MAX) /* ziltest support */
 		otxg = ZILTEST_TXG;
 	else
 		otxg = spa_last_synced_txg(zilog->zl_spa) + 1;
 
-	/*
-	 * This is inherently racy, since there is nothing to prevent
-	 * the last synced txg from changing. That's okay since we'll
-	 * only commit things in the future.
-	 */
 	for (txg = otxg; txg < (otxg + TXG_CONCURRENT_STATES); txg++) {
 		itxg_t *itxg = &zilog->zl_itxg[txg & TXG_MASK];
 
@@ -1480,20 +1457,13 @@ zil_get_commit_list(zilog_t *zilog)
 			continue;
 		}
 
-		/*
-		 * If we're adding itx records to the zl_itx_commit_list,
-		 * then the zil better be dirty in this "txg". We can assert
-		 * that here since we're holding the itxg_lock which will
-		 * prevent spa_sync from cleaning it. Once we add the itxs
-		 * to the zl_itx_commit_list we must commit it to disk even
-		 * if it's unnecessary (i.e. the txg was synced).
-		 */
-		ASSERT(zilog_is_dirty_in_txg(zilog, txg) ||
-		    spa_freeze_txg(zilog->zl_spa) != UINT64_MAX);
 		list_move_tail(commit_list, &itxg->itxg_itxs->i_sync_list);
+		push_sod += itxg->itxg_sod;
+		itxg->itxg_sod = 0;
 
 		mutex_exit(&itxg->itxg_lock);
 	}
+	atomic_add_64(&zilog->zl_itx_list_sz, -push_sod);
 }
 
 /*
@@ -1512,10 +1482,6 @@ zil_async_to_sync(zilog_t *zilog, uint64_t foid)
 	else
 		otxg = spa_last_synced_txg(zilog->zl_spa) + 1;
 
-	/*
-	 * This is inherently racy, since there is nothing to prevent
-	 * the last synced txg from changing.
-	 */
 	for (txg = otxg; txg < (otxg + TXG_CONCURRENT_STATES); txg++) {
 		itxg_t *itxg = &zilog->zl_itxg[txg & TXG_MASK];
 
@@ -1588,14 +1554,8 @@ zil_commit_writer(zilog_t *zilog)
 	for (itx = list_head(&zilog->zl_itx_commit_list); itx != NULL;
 	    itx = list_next(&zilog->zl_itx_commit_list, itx)) {
 		txg = itx->itx_lr.lrc_txg;
-		ASSERT3U(txg, !=, 0);
+		ASSERT(txg);
 
-		/*
-		 * This is inherently racy and may result in us writing
-		 * out a log block for a txg that was just synced. This is
-		 * ok since we'll end cleaning up that log block the next
-		 * time we call zil_sync().
-		 */
 		if (txg > spa_last_synced_txg(spa) || txg > spa_freeze_txg(spa))
 			lwb = zil_lwb_commit(zilog, itx, lwb);
 	}
@@ -1926,7 +1886,7 @@ zil_open(objset_t *os, zil_get_data_t *get_data)
 	ASSERT(list_is_empty(&zilog->zl_lwb_list));
 
 	zilog->zl_get_data = get_data;
-	zilog->zl_clean_taskq = taskq_create("zil_clean", 1, defclsyspri,
+	zilog->zl_clean_taskq = taskq_create("zil_clean", 1, minclsyspri,
 	    2, 2, TASKQ_PREPOPULATE);
 
 	return (zilog);
@@ -1956,11 +1916,7 @@ zil_close(zilog_t *zilog)
 	mutex_exit(&zilog->zl_lock);
 	if (txg)
 		txg_wait_synced(zilog->zl_dmu_pool, txg);
-
-	if (zilog_is_dirty(zilog))
-		zfs_dbgmsg("zil (%p) is dirty, txg %llu", zilog, txg);
-	if (txg < spa_freeze_txg(zilog->zl_spa))
-		VERIFY(!zilog_is_dirty(zilog));
+	ASSERT(!zilog_is_dirty(zilog));
 
 	taskq_destroy(zilog->zl_clean_taskq);
 	zilog->zl_clean_taskq = NULL;
@@ -2120,7 +2076,7 @@ typedef struct zil_replay_arg {
 static int
 zil_replay_error(zilog_t *zilog, lr_t *lr, int error)
 {
-	char name[ZFS_MAX_DATASET_NAME_LEN];
+	char name[MAXNAMELEN];
 
 	zilog->zl_replaying_seq--;	/* didn't actually replay this one */
 
@@ -2164,7 +2120,7 @@ zil_replay_log_record(zilog_t *zilog, lr_t *lr, void *zra, uint64_t claim_txg)
 	 */
 	if (TX_OOO(txtype)) {
 		error = dmu_object_info(zilog->zl_os,
-		    LR_FOID_GET_OBJ(((lr_ooo_t *)lr)->lr_foid), NULL);
+		    ((lr_ooo_t *)lr)->lr_foid, NULL);
 		if (error == ENOENT || error == EEXIST)
 			return (0);
 	}
@@ -2316,14 +2272,12 @@ EXPORT_SYMBOL(zil_bp_tree_add);
 EXPORT_SYMBOL(zil_set_sync);
 EXPORT_SYMBOL(zil_set_logbias);
 
-/* BEGIN CSTYLED */
 module_param(zil_replay_disable, int, 0644);
 MODULE_PARM_DESC(zil_replay_disable, "Disable intent logging replay");
 
 module_param(zfs_nocacheflush, int, 0644);
 MODULE_PARM_DESC(zfs_nocacheflush, "Disable cache flushes");
 
-module_param(zil_slog_bulk, ulong, 0644);
-MODULE_PARM_DESC(zil_slog_bulk, "Limit in bytes slog sync writes per commit");
-/* END CSTYLED */
+module_param(zil_slog_limit, ulong, 0644);
+MODULE_PARM_DESC(zil_slog_limit, "Max commit bytes to separate log device");
 #endif

@@ -1,12 +1,13 @@
+
 ACLOCAL_AMFLAGS = -I config
 
-include config/rpm.am
-include config/deb.am
-include config/tgz.am
+include $(top_srcdir)/config/rpm.am
+include $(top_srcdir)/config/deb.am
+include $(top_srcdir)/config/tgz.am
 
 SUBDIRS = include rpm
 if CONFIG_USER
-SUBDIRS += udev etc man scripts lib tests cmd contrib
+SUBDIRS += dracut udev etc man scripts lib cmd contrib
 endif
 if CONFIG_KERNEL
 SUBDIRS += module
@@ -39,59 +40,20 @@ dist-hook:
 	sed -i 's/Release:[[:print:]]*/Release:      $(RELEASE)/' \
 		$(distdir)/META
 
-checkstyle: cstyle shellcheck flake8 commitcheck
-
-commitcheck:
-	@if git rev-parse --git-dir > /dev/null 2>&1; then \
-		scripts/commitcheck.sh; \
-	fi
-
-cstyle:
+checkstyle:
 	@find ${top_srcdir} -name '*.[hc]' ! -name 'zfs_config.*' \
-		! -name '*.mod.c' -type f -exec scripts/cstyle.pl -cpP {} \+
-
-shellcheck:
-	@if type shellcheck > /dev/null 2>&1; then \
-		shellcheck --exclude=SC1090 --format=gcc scripts/paxcheck.sh \
-			scripts/zloop.sh \
-			scripts/zfs-tests.sh \
-			scripts/zfs.sh \
-			scripts/commitcheck.sh \
-			$$(find cmd/zed/zed.d/*.sh -type f) \
-			$$(find cmd/zpool/zpool.d/* -executable); \
-	fi
-
-lint: cppcheck paxcheck
-
-cppcheck:
-	@if type cppcheck > /dev/null 2>&1; then \
-		cppcheck --quiet --force --error-exitcode=2 --inline-suppr \
-			--suppressions-list=.github/suppressions.txt \
-			-UHAVE_SSE2 -UHAVE_AVX512F -UHAVE_UIO_ZEROCOPY \
-			-UHAVE_DNLC ${top_srcdir}; \
-	fi
-
-paxcheck:
-	@if type scanelf > /dev/null 2>&1; then \
-		scripts/paxcheck.sh ${top_srcdir}; \
-	fi
-
-flake8:
-	@if type flake8 > /dev/null 2>&1; then \
-		flake8 ${top_srcdir}; \
-	fi
+		! -name '*.mod.c' -type f -exec scripts/cstyle.pl {} \+
 
 ctags:
-	$(RM) tags
+	$(RM) $(top_srcdir)/tags
 	find $(top_srcdir) -name .git -prune -o -name '*.[hc]' | xargs ctags
 
 etags:
-	$(RM) TAGS
+	$(RM) $(top_srcdir)/TAGS
 	find $(top_srcdir) -name .pc -prune -o -name '*.[hc]' | xargs etags -a
 
 tags: ctags etags
 
 pkg: @DEFAULT_PACKAGE@
-pkg-dkms: @DEFAULT_PACKAGE@-dkms
 pkg-kmod: @DEFAULT_PACKAGE@-kmod
 pkg-utils: @DEFAULT_PACKAGE@-utils

@@ -109,6 +109,8 @@ umem_alloc_aligned(size_t size, size_t align, int flags)
 		return (NULL);
 	}
 
+	ASSERT0(P2PHASE_TYPED(ptr, align, uint64_t));
+
 	return (ptr);
 }
 
@@ -131,8 +133,7 @@ umem_free(void *ptr, size_t size)
 }
 
 static inline void
-umem_nofail_callback(umem_nofail_callback_t *cb)
-{}
+umem_nofail_callback(umem_nofail_callback_t *cb) {}
 
 static inline umem_cache_t *
 umem_cache_create(
@@ -190,11 +191,6 @@ umem_cache_free(umem_cache_t *cp, void *ptr)
 		cp->cache_destructor(ptr, cp->cache_private);
 
 	umem_free(ptr, cp->cache_bufsize);
-}
-
-static inline void
-umem_cache_reap_now(umem_cache_t *cp)
-{
 }
 
 #ifdef  __cplusplus

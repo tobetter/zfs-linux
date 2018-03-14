@@ -31,12 +31,6 @@ PRE_BUILD="configure
   --with-spl-obj=\${dkms_tree}/spl/\${PACKAGE_VERSION}/\${kernelver}/\${arch}
   --with-spl-timeout=300
   \$(
-    [[ -n \"\${ICP_ROOT}\" ]] && \\
-    {
-      echo --with-qat=\"\${ICP_ROOT}\"
-    }
-  )
-  \$(
     [[ -r \${PACKAGE_CONFIG} ]] \\
     && source \${PACKAGE_CONFIG} \\
     && shopt -q -s extglob \\
@@ -76,7 +70,6 @@ STRIP[2]="\${STRIP[0]}"
 STRIP[3]="\${STRIP[0]}"
 STRIP[4]="\${STRIP[0]}"
 STRIP[5]="\${STRIP[0]}"
-STRIP[6]="\${STRIP[0]}"
 BUILT_MODULE_NAME[0]="zavl"
 BUILT_MODULE_LOCATION[0]="module/avl/"
 DEST_MODULE_LOCATION[0]="/extra/avl/avl"
@@ -95,7 +88,4 @@ DEST_MODULE_LOCATION[4]="/extra/zfs/zfs"
 BUILT_MODULE_NAME[5]="zpios"
 BUILT_MODULE_LOCATION[5]="module/zpios/"
 DEST_MODULE_LOCATION[5]="/extra/zpios/zpios"
-BUILT_MODULE_NAME[6]="icp"
-BUILT_MODULE_LOCATION[6]="module/icp/"
-DEST_MODULE_LOCATION[6]="/extra/icp/icp"
 EOF

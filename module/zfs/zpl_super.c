@@ -187,26 +187,53 @@ zpl_statfs(struct dentry *dentry, struct kstatfs *statp)
 static int
 zpl_remount_fs(struct super_block *sb, int *flags, char *data)
 {
-	zfs_mnt_t zm = { .mnt_osname = NULL, .mnt_data = data };
 	fstrans_cookie_t cookie;
 	int error;
 
 	cookie = spl_fstrans_mark();
-	error = -zfs_remount(sb, flags, &zm);
+	error = -zfs_remount(sb, flags, data);
 	spl_fstrans_unmark(cookie);
 	ASSERT3S(error, <=, 0);
 
 	return (error);
 }
 
-static int
-__zpl_show_options(struct seq_file *seq, zfsvfs_t *zfsvfs)
+static void
+zpl_umount_begin(struct super_block *sb)
 {
-	seq_printf(seq, ",%s",
-	    zfsvfs->z_flags & ZSB_XATTR ? "xattr" : "noxattr");
+	zfs_sb_t *zsb = sb->s_fs_info;
+	int count;
+
+	/*
+	 * Best effort to unmount snapshots in .zfs/snapshot/.  Normally this
+	 * isn't required because snapshots have the MNT_SHRINKABLE flag set.
+	 */
+	if (zsb->z_ctldir)
+		(void) zfsctl_unmount_snapshots(zsb, MNT_FORCE, &count);
+}
+
+/*
+ * ZFS specific features must be explicitly handled here, the VFS will
+ * automatically handled the following generic functionality.
+ *
+ *   MNT_NOSUID,
+ *   MNT_NODEV,
+ *   MNT_NOEXEC,
+ *   MNT_NOATIME,
+ *   MNT_NODIRATIME,
+ *   MNT_READONLY,
+ *   MNT_STRICTATIME,
+ *   MS_SYNCHRONOUS,
+ *   MS_DIRSYNC,
+ *   MS_MANDLOCK.
+ */
+static int
+__zpl_show_options(struct seq_file *seq, zfs_sb_t *zsb)
+{
+	seq_printf(seq, ",%s", zsb->z_flags & ZSB_XATTR ? "xattr" : "noxattr");
 
 #ifdef CONFIG_FS_POSIX_ACL
-	switch (zfsvfs->z_acl_type) {
+	switch (zsb->z_acl_type) {
 	case ZFS_ACLTYPE_POSIXACL:
 		seq_puts(seq, ",posixacl");
 		break;
@@ -236,12 +263,11 @@ zpl_show_options(struct seq_file *seq, struct vfsmount *vfsp)
 static int
 zpl_fill_super(struct super_block *sb, void *data, int silent)
 {
-	zfs_mnt_t *zm = (zfs_mnt_t *)data;
 	fstrans_cookie_t cookie;
 	int error;
 
 	cookie = spl_fstrans_mark();
-	error = -zfs_domount(sb, zm, silent);
+	error = -zfs_domount(sb, data, silent);
 	spl_fstrans_unmark(cookie);
 	ASSERT3S(error, <=, 0);
 
@@ -253,18 +279,18 @@ static struct dentry *
 zpl_mount(struct file_system_type *fs_type, int flags,
     const char *osname, void *data)
 {
-	zfs_mnt_t zm = { .mnt_osname = osname, .mnt_data = data };
+	zpl_mount_data_t zmd = { osname, data };
 
-	return (mount_nodev(fs_type, flags, &zm, zpl_fill_super));
+	return (mount_nodev(fs_type, flags, &zmd, zpl_fill_super));
 }
 #else
 static int
 zpl_get_sb(struct file_system_type *fs_type, int flags,
     const char *osname, void *data, struct vfsmount *mnt)
 {
-	zfs_mnt_t zm = { .mnt_osname = osname, .mnt_data = data };
+	zpl_mount_data_t zmd = { osname, data };
 
-	return (get_sb_nodev(fs_type, flags, &zm, zpl_fill_super, mnt));
+	return (get_sb_nodev(fs_type, flags, &zmd, zpl_fill_super, mnt));
 }
 #endif /* HAVE_MOUNT_NODEV */
 
@@ -285,18 +311,31 @@ zpl_prune_sb(int64_t nr_to_scan, void *arg)
 	struct super_block *sb = (struct super_block *)arg;
 	int objects = 0;
 
-	(void) -zfs_prune(sb, nr_to_scan, &objects);
+	(void) -zfs_sb_prune(sb, nr_to_scan, &objects);
 }
 
 #ifdef HAVE_NR_CACHED_OBJECTS
 static int
 zpl_nr_cached_objects(struct super_block *sb)
 {
-	return (0);
+	zfs_sb_t *zsb = sb->s_fs_info;
+	int nr;
+
+	mutex_enter(&zsb->z_znodes_lock);
+	nr = zsb->z_nr_znodes;
+	mutex_exit(&zsb->z_znodes_lock);
+
+	return (nr);
 }
 #endif /* HAVE_NR_CACHED_OBJECTS */
 
 #ifdef HAVE_FREE_CACHED_OBJECTS
+/*
+ * Attempt to evict some meta data from the cache.  The ARC operates in
+ * terms of bytes while the Linux VFS uses objects.  Now because this is
+ * just a best effort eviction and the exact values aren't critical so we
+ * extrapolate from an object count to a byte size using the znode_t size.
+ */
 static void
 zpl_free_cached_objects(struct super_block *sb, int nr_to_scan)
 {
@@ -320,6 +359,7 @@ const struct super_operations zpl_super_operations = {
 	.sync_fs		= zpl_sync_fs,
 	.statfs			= zpl_statfs,
 	.remount_fs		= zpl_remount_fs,
+	.umount_begin		= zpl_umount_begin,
 	.show_options		= zpl_show_options,
 	.show_stats		= NULL,
 #ifdef HAVE_NR_CACHED_OBJECTS

@@ -1,15 +1,27 @@
 /*
- * This file is part of the ZFS Event Daemon (ZED)
- * for ZFS on Linux (ZoL) <http://zfsonlinux.org/>.
- * Developed at Lawrence Livermore National Laboratory (LLNL-CODE-403049).
- * Copyright (C) 2013-2014 Lawrence Livermore National Security, LLC.
- * Refer to the ZoL git commit log for authoritative copyright attribution.
+ * CDDL HEADER START
  *
  * The contents of this file are subject to the terms of the
- * Common Development and Distribution License Version 1.0 (CDDL-1.0).
- * You can obtain a copy of the license from the top-level file
- * "OPENSOLARIS.LICENSE" or at <http://opensource.org/licenses/CDDL-1.0>.
- * You may not use this file except in compliance with the license.
+ * Common Development and Distribution License (the "License").
+ * You may not use this file except in compliance with the License.
+ *
+ * You can obtain a copy of the license from the top-level
+ * OPENSOLARIS.LICENSE or <http://opensource.org/licenses/CDDL-1.0>.
+ * See the License for the specific language governing permissions
+ * and limitations under the License.
+ *
+ * When distributing Covered Code, include this CDDL HEADER in each file
+ * and include the License file from the top-level OPENSOLARIS.LICENSE.
+ * If applicable, add the following below this CDDL HEADER, with the
+ * fields enclosed by brackets "[]" replaced with your own identifying
+ * information: Portions Copyright [yyyy] [name of copyright owner]
+ *
+ * CDDL HEADER END
+ */
+
+/*
+ * Developed at Lawrence Livermore National Laboratory (LLNL-CODE-403049).
+ * Copyright (C) 2013-2014 Lawrence Livermore National Security, LLC.
  */
 
 #include <assert.h>
@@ -184,9 +196,10 @@ _zed_conf_display_license(void)
 	    "The ZFS Event Daemon (ZED) is distributed under the terms of the",
 	    "  Common Development and Distribution License (CDDL-1.0)",
 	    "  <http://opensource.org/licenses/CDDL-1.0>.",
-	    "",
 	    "Developed at Lawrence Livermore National Laboratory"
 	    " (LLNL-CODE-403049).",
+	    "Copyright (C) 2013-2014"
+	    " Lawrence Livermore National Security, LLC.",
 	    "",
 	    NULL
 	};
@@ -394,13 +407,13 @@ zed_conf_scan_dir(struct zed_conf *zcp)
 			    direntp->d_name);
 			continue;
 		}
-		if ((st.st_mode & S_IWGRP) && !zcp->do_force) {
+		if ((st.st_mode & S_IWGRP) & !zcp->do_force) {
 			zed_log_msg(LOG_NOTICE,
 			    "Ignoring \"%s\": writable by group",
 			    direntp->d_name);
 			continue;
 		}
-		if ((st.st_mode & S_IWOTH) && !zcp->do_force) {
+		if ((st.st_mode & S_IWOTH) & !zcp->do_force) {
 			zed_log_msg(LOG_NOTICE,
 			    "Ignoring \"%s\": writable by other",
 			    direntp->d_name);
@@ -513,7 +526,7 @@ zed_conf_write_pid(struct zed_conf *zcp)
 	/*
 	 * Write PID file.
 	 */
-	n = snprintf(buf, sizeof (buf), "%d\n", (int)getpid());
+	n = snprintf(buf, sizeof (buf), "%d\n", (int) getpid());
 	if ((n < 0) || (n >= sizeof (buf))) {
 		errno = ERANGE;
 		zed_log_msg(LOG_ERR, "Failed to write PID file \"%s\": %s",
@@ -637,7 +650,7 @@ zed_conf_read_state(struct zed_conf *zcp, uint64_t *eidp, int64_t etime[])
 		    "Failed to read state file: %s", strerror(errno));
 		return (-1);
 	}
-	if (lseek(zcp->state_fd, 0, SEEK_SET) == (off_t)-1) {
+	if (lseek(zcp->state_fd, 0, SEEK_SET) == (off_t) -1) {
 		zed_log_msg(LOG_WARNING,
 		    "Failed to reposition state file offset: %s",
 		    strerror(errno));
@@ -687,7 +700,7 @@ zed_conf_write_state(struct zed_conf *zcp, uint64_t eid, int64_t etime[])
 		    "Failed to write state file: %s", strerror(errno));
 		return (-1);
 	}
-	if (lseek(zcp->state_fd, 0, SEEK_SET) == (off_t)-1) {
+	if (lseek(zcp->state_fd, 0, SEEK_SET) == (off_t) -1) {
 		zed_log_msg(LOG_WARNING,
 		    "Failed to reposition state file offset: %s",
 		    strerror(errno));

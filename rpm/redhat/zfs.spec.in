@@ -28,12 +28,8 @@
 %endif
 %endif
 
-# Set the default _initconfdir when undefined.
-%if %{undefined _initconfdir}
-%global _initconfdir /etc/sysconfig
-%endif
-
 %bcond_with    debug
+%bcond_with    blkid
 %bcond_with    systemd
 
 # Generic enable switch for systemd
@@ -68,6 +64,11 @@ License:        @ZFS_META_LICENSE@
 URL:            http://zfsonlinux.org/
 Source0:        %{name}-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+ExclusiveArch:  i386 i686 x86_64
+
+# May build but untested on ppc/ppc64
+ExcludeArch:    ppc ppc64
+
 Requires:       spl = %{version}
 Requires:       libzpool2 = %{version}
 Requires:       libnvpair1 = %{version}
@@ -83,9 +84,9 @@ Conflicts:      zfs-fuse
 %if 0%{?rhel}%{?fedora}%{?suse_version}
 BuildRequires:  zlib-devel
 BuildRequires:  libuuid-devel
+%if %{with blkid}
 BuildRequires:  libblkid-devel
-BuildRequires:  libudev-devel
-BuildRequires:  libattr-devel
+%endif
 %endif
 %if 0%{?_systemd}
 Requires(post): systemd
@@ -93,10 +94,6 @@ Requires(preun): systemd
 Requires(postun): systemd
 BuildRequires: systemd
 %endif
-
-# The zpool iostat/status -c scripts call some utilities like lsblk and iostat
-Requires:  util-linux
-Requires:  sysstat
 
 %description
 This package contains the ZFS command line utilities.
@@ -177,13 +174,6 @@ Requires:       parted
 Requires:       lsscsi
 Requires:       mdadm
 Requires:       bc
-Requires:       ksh
-Requires:       fio
-Requires:       acl
-Requires:       sudo
-Requires:       sysstat
-Requires:       rng-tools
-AutoReqProv:    no
 
 %description test
 This package contains test infrastructure and support scripts for
@@ -199,28 +189,19 @@ Requires:       dracut
 This package contains a dracut module used to construct an initramfs
 image which is ZFS aware.
 
-%if 0%{?_initramfs}
-%package initramfs
-Summary:        Initramfs module
-Group:          System Environment/Kernel
-Requires:       %{name}%{?_isa} = %{version}-%{release}
-Requires:       %{name} = %{version}-%{release}
-Requires:       initramfs-tools
-
-%description initramfs
-This package contains a initramfs module used to construct an initramfs
-image which is ZFS aware.
-%endif
-
 %prep
 %if %{with debug}
     %define debug --enable-debug
 %else
     %define debug --disable-debug
 %endif
+%if %{with blkid}
+    %define blkid --with-blkid
+%else
+    %define blkid --without-blkid
+%endif
 %if 0%{?_systemd}
     %define systemd --enable-systemd --with-systemdunitdir=%{_unitdir} --with-systemdpresetdir=%{_presetdir} --disable-sysvinit
-    %define systemd_svcs zfs-import-cache.service zfs-import-scan.service zfs-mount.service zfs-share.service zfs-zed.service zfs.target zfs-import.target
 %else
     %define systemd --enable-sysvinit --disable-systemd
 %endif
@@ -235,6 +216,7 @@ image which is ZFS aware.
     --with-dracutdir=%{_dracutdir} \
     --disable-static \
     %{debug} \
+    %{blkid} \
     %{systemd}
 make %{?_smp_mflags}
 
@@ -245,33 +227,25 @@ find %{?buildroot}%{_libdir} -name '*.la' -exec rm -f {} \;
 
 %post
 %if 0%{?_systemd}
-%systemd_post %{systemd_svcs}
+%systemd_post zfs.target
 %else
-if [ -x /sbin/chkconfig ]; then
-    /sbin/chkconfig --add zfs-import
-    /sbin/chkconfig --add zfs-mount
-    /sbin/chkconfig --add zfs-share
-    /sbin/chkconfig --add zfs-zed
-fi
+[ -x /sbin/chkconfig ] && /sbin/chkconfig --add zfs
 %endif
 exit 0
 
 %preun
 %if 0%{?_systemd}
-%systemd_preun %{systemd_svcs}
+%systemd_preun zfs.target
 %else
-if [ "$1" = "0" ] && [ -x /sbin/chkconfig ]; then
-    /sbin/chkconfig --del zfs-import
-    /sbin/chkconfig --del zfs-mount
-    /sbin/chkconfig --del zfs-share
-    /sbin/chkconfig --del zfs-zed
+if [ $1 -eq 0 ] ; then
+    [ -x /sbin/chkconfig ] && /sbin/chkconfig --del zfs
 fi
 %endif
 exit 0
 
 %postun
 %if 0%{?_systemd}
-%systemd_postun %{systemd_svcs}
+%systemd_postun zfs.target
 %endif
 
 %files
@@ -284,16 +258,14 @@ exit 0
 %{_udevdir}/vdev_id
 %{_udevdir}/zvol_id
 %{_udevdir}/rules.d/*
+%config(noreplace) %{_sysconfdir}/%{name}
 %if 0%{?_systemd}
 /usr/lib/modules-load.d/*
 %{_unitdir}/*
 %{_presetdir}/*
 %else
-%config(noreplace) %{_sysconfdir}/init.d/*
-%config(noreplace) %{_initconfdir}/zfs
+%{_sysconfdir}/init.d/*
 %endif
-%config(noreplace) %{_sysconfdir}/%{name}
-%attr(440, root, root) %config(noreplace) %{_sysconfdir}/sudoers.d/*
 
 %files -n libzpool2
 %{_libdir}/libzpool.so.*
@@ -319,38 +291,29 @@ exit 0
 %{_datadir}/%{name}
 
 %files dracut
-%doc contrib/dracut/README.dracut.markdown
+%doc dracut/README.dracut.markdown
 %{_dracutdir}/modules.d/*
 
-%if 0%{?_initramfs}
-%files initramfs
-%doc contrib/initramfs/README.initramfs.markdown
-/usr/share/initramfs-tools/*
-%else
-# Since we're not building the initramfs package,
-# ignore those files.
-%exclude /usr/share/initramfs-tools
-%endif
-
 %changelog
-* Thu Feb 01 2018 Tony Hutter <hutter2@llnl.gov> - 0.7.6-1
-- Released 0.7.6-1, detailed release notes are available at:
-- https://github.com/zfsonlinux/zfs/releases/tag/zfs-0.7.6
-* Mon Dec 18 2017 Tony Hutter <hutter2@llnl.gov> - 0.7.5-1
-- Released 0.7.5-1, detailed release notes are available at:
-- https://github.com/zfsonlinux/zfs/releases/tag/zfs-0.7.5
-* Thu Dec 07 2017 Tony Hutter <hutter2@llnl.gov> - 0.7.4-1
-- Released 0.7.4-1, detailed release notes are available at:
-- https://github.com/zfsonlinux/zfs/releases/tag/zfs-0.7.4
-* Wed Oct 18 2017 Tony Hutter <hutter2@llnl.gov> - 0.7.3-1
-- Released 0.7.3-1, detailed release notes are available at:
-- https://github.com/zfsonlinux/zfs/releases/tag/zfs-0.7.3
-* Fri Sep 22 2017 Tony Hutter <hutter2@llnl.gov> - 0.7.2-1
-- Released 0.7.2-1, detailed release notes are available at:
-- https://github.com/zfsonlinux/zfs/releases/tag/zfs-0.7.2
-* Tue Aug 8 2017 Tony Hutter <hutter2@llnl.gov> - 0.7.1-1
-- Released 0.7.1-1, detailed release notes are available at:
-- https://github.com/zfsonlinux/zfs/releases/tag/zfs-0.7.1
-* Wed Jul 26 2017 Brian Behlendorf <behlendorf1@llnl.gov> - 0.7.0-1
-- Released 0.7.0-1, detailed release notes are available at:
-- https://github.com/zfsonlinux/zfs/releases/tag/zfs-0.7.0
+* Wed Jun 24 2015 Ned Bass <bass6@llnl.gov> - 0.6.4.2-1
+- Fix panic due to corrupt nvlist when running utilities zfsonlinux/zfs#3335
+- Fix hard lockup due to infinite loop in zfs_zget() zfsonlinux/zfs#3349
+- Fix panic on unmount due to iput taskq zfsonlinux/zfs#3281
+- Improve metadata shrinker performance on pre-3.1 kernels zfsonlinux/zfs#3501
+- Linux 4.1 compat: use read_iter() / write_iter()
+- Linux 3.12 compat: NUMA-aware per-superblock shrinker
+- Fix spurious hung task watchdog stack traces zfsonlinux/zfs#3402
+- Fix module loading in zfs import systemd service zfsonlinux/zfs#3440
+- Fix intermittent libzfs_init() failure to open /dev/zfs zfsonlinux/zfs#2556
+* Thu Apr 23 2015 Brian Behlendorf <behlendorf1@llnl.gov> - 0.6.4.1-1
+- Fix direct memory reclaim deadlocks zfsonlinux/zfs#3331 zfsonlinux/zfs#3225
+- Fix hot-disk sparing for disk vdevs zfsonlinux/zfs#3310
+- Fix system spinning during ARC reclaim zfsonlinux/zfs#3283
+* Wed Apr  8 2015 Brian Behlendorf <behlendorf1@llnl.gov> - 0.6.4-1
+- Released 0.6.4-1
+* Thu Jun 12 2014 Brian Behlendorf <behlendorf1@llnl.gov> - 0.6.3-1
+- Released 0.6.3-1
+* Wed Aug 21 2013 Brian Behlendorf <behlendorf1@llnl.gov> - 0.6.2-1
+- Released 0.6.2-1
+* Fri Mar 22 2013 Brian Behlendorf <behlendorf1@llnl.gov> - 0.6.1-1
+- First official stable release.

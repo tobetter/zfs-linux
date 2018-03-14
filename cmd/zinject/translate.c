@@ -120,7 +120,7 @@ parse_pathname(const char *inpath, char *dataset, char *relpath,
 #else
 	if ((fp = fopen(MNTTAB, "r")) == NULL) {
 #endif
-		(void) fprintf(stderr, "cannot open %s\n", MNTTAB);
+		(void) fprintf(stderr, "cannot open /etc/mtab\n");
 		return (-1);
 	}
 
@@ -436,7 +436,7 @@ translate_raw(const char *str, zinject_record_t *record)
 {
 	/*
 	 * A raw bookmark of the form objset:object:level:blkid, where each
-	 * number is a hexadecimal value.
+	 * number is a hexidecimal value.
 	 */
 	if (sscanf(str, "%llx:%llx:%x:%llx", (u_longlong_t *)&record->zi_objset,
 	    (u_longlong_t *)&record->zi_object, &record->zi_level,
@@ -474,7 +474,6 @@ translate_device(const char *pool, const char *device, err_type_t label_type,
 		if (tgt == NULL) {
 			(void) fprintf(stderr, "cannot find device '%s' in "
 			    "pool '%s'\n", device, pool);
-			zpool_close(zhp);
 			return (-1);
 		}
 
@@ -516,6 +515,5 @@ translate_device(const char *pool, const char *device, err_type_t label_type,
 		record->zi_end = record->zi_start + VDEV_PAD_SIZE - 1;
 		break;
 	}
-	zpool_close(zhp);
 	return (0);
 }

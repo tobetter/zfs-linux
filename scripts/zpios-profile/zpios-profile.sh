@@ -91,7 +91,7 @@ check_pid() {
 }
 
 # NOTE: This whole process is crazy slow but it will do for now
-acquire_pids() {
+aquire_pids() {
 	echo "--- Aquiring ZFS pids ---"
 
 	for PID in `ls /proc/ | grep [0-9] | sort -n -u`; do
@@ -218,7 +218,7 @@ log_pids() {
 	done
 }
 
-acquire_pids
+aquire_pids
 log_pids
 
 # rm ${PROFILE_PID}

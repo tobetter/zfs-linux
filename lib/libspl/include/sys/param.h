@@ -57,11 +57,8 @@
 #define	MAXUID		UINT32_MAX	/* max user id */
 #define	MAXPROJID	MAXUID		/* max project id */
 
-#ifdef	PAGESIZE
-#undef	PAGESIZE
+#ifndef	PAGESIZE
+#define	PAGESIZE	(sysconf(_SC_PAGESIZE))
 #endif /* PAGESIZE */
-
-extern size_t spl_pagesize(void);
-#define	PAGESIZE	(spl_pagesize())
 
 #endif

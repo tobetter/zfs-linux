@@ -25,14 +25,12 @@
 #ifndef	_SYS_ZPL_H
 #define	_SYS_ZPL_H
 
-#include <sys/mntent.h>
 #include <sys/vfs.h>
 #include <linux/aio.h>
 #include <linux/dcache_compat.h>
 #include <linux/exportfs.h>
 #include <linux/falloc.h>
 #include <linux/file_compat.h>
-#include <linux/parser.h>
 #include <linux/task_io_accounting_ops.h>
 #include <linux/vfs_compat.h>
 #include <linux/writeback.h>
@@ -67,6 +65,11 @@ extern const struct file_operations zpl_dir_file_operations;
 /* zpl_super.c */
 extern void zpl_prune_sb(int64_t nr_to_scan, void *arg);
 
+typedef struct zpl_mount_data {
+	const char *z_osname;	/* Dataset name */
+	void *z_data;		/* Mount options string */
+} zpl_mount_data_t;
+
 extern const struct super_operations zpl_super_operations;
 extern const struct export_operations zpl_export_operations;
 extern struct file_system_type zpl_fs_type;
@@ -76,7 +79,7 @@ extern ssize_t zpl_xattr_list(struct dentry *dentry, char *buf, size_t size);
 extern int zpl_xattr_security_init(struct inode *ip, struct inode *dip,
     const struct qstr *qstr);
 #if defined(CONFIG_FS_POSIX_ACL)
-extern int zpl_set_acl(struct inode *ip, struct posix_acl *acl, int type);
+extern int zpl_set_acl(struct inode *ip, int type, struct posix_acl *acl);
 extern struct posix_acl *zpl_get_acl(struct inode *ip, int type);
 #if !defined(HAVE_GET_ACL)
 #if defined(HAVE_CHECK_ACL_WITH_FLAGS)
@@ -123,7 +126,7 @@ extern const struct inode_operations zpl_ops_snapdirs;
 extern const struct file_operations zpl_fops_shares;
 extern const struct inode_operations zpl_ops_shares;
 
-#if defined(HAVE_VFS_ITERATE) || defined(HAVE_VFS_ITERATE_SHARED)
+#ifdef HAVE_VFS_ITERATE
 
 #define	DIR_CONTEXT_INIT(_dirent, _actor, _pos) {	\
 	.actor = _actor,				\
@@ -148,21 +151,22 @@ static inline bool
 dir_emit(struct dir_context *ctx, const char *name, int namelen,
     uint64_t ino, unsigned type)
 {
-	return (!ctx->actor(ctx->dirent, name, namelen, ctx->pos, ino, type));
+	return (ctx->actor(ctx->dirent, name, namelen, ctx->pos, ino, type)
+		== 0);
 }
 
 static inline bool
 dir_emit_dot(struct file *file, struct dir_context *ctx)
 {
 	return (ctx->actor(ctx->dirent, ".", 1, ctx->pos,
-	    file_inode(file)->i_ino, DT_DIR) == 0);
+	    file->f_path.dentry->d_inode->i_ino, DT_DIR) == 0);
 }
 
 static inline bool
 dir_emit_dotdot(struct file *file, struct dir_context *ctx)
 {
 	return (ctx->actor(ctx->dirent, "..", 2, ctx->pos,
-	    parent_ino(file_dentry(file)), DT_DIR) == 0);
+	    parent_ino(file->f_path.dentry), DT_DIR) == 0);
 }
 
 static inline bool

@@ -20,7 +20,7 @@
  */
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2011, 2015 by Delphix. All rights reserved.
+ * Copyright (c) 2013 by Delphix. All rights reserved.
  */
 
 /*
@@ -164,10 +164,10 @@ dsl_deleg_set_sync(void *arg, dmu_tx_t *tx)
 
 	VERIFY0(dsl_dir_hold(dp, dda->dda_name, FTAG, &dd, NULL));
 
-	zapobj = dsl_dir_phys(dd)->dd_deleg_zapobj;
+	zapobj = dd->dd_phys->dd_deleg_zapobj;
 	if (zapobj == 0) {
 		dmu_buf_will_dirty(dd->dd_dbuf, tx);
-		zapobj = dsl_dir_phys(dd)->dd_deleg_zapobj = zap_create(mos,
+		zapobj = dd->dd_phys->dd_deleg_zapobj = zap_create(mos,
 		    DMU_OT_DSL_PERMS, DMU_OT_NONE, 0, tx);
 	}
 
@@ -208,7 +208,7 @@ dsl_deleg_unset_sync(void *arg, dmu_tx_t *tx)
 	uint64_t zapobj;
 
 	VERIFY0(dsl_dir_hold(dp, dda->dda_name, FTAG, &dd, NULL));
-	zapobj = dsl_dir_phys(dd)->dd_deleg_zapobj;
+	zapobj = dd->dd_phys->dd_deleg_zapobj;
 	if (zapobj == 0) {
 		dsl_dir_rele(dd, FTAG);
 		return;
@@ -282,7 +282,7 @@ dsl_deleg_set(const char *ddname, nvlist_t *nvp, boolean_t unset)
 
 	return (dsl_sync_task(ddname, dsl_deleg_check,
 	    unset ? dsl_deleg_unset_sync : dsl_deleg_set_sync,
-	    &dda, fnvlist_num_pairs(nvp), ZFS_SPACE_CHECK_RESERVED));
+	    &dda, fnvlist_num_pairs(nvp)));
 }
 
 /*
@@ -330,21 +330,21 @@ dsl_deleg_get(const char *ddname, nvlist_t **nvp)
 	za = kmem_alloc(sizeof (zap_attribute_t), KM_SLEEP);
 	basezc = kmem_alloc(sizeof (zap_cursor_t), KM_SLEEP);
 	baseza = kmem_alloc(sizeof (zap_attribute_t), KM_SLEEP);
-	source = kmem_alloc(ZFS_MAX_DATASET_NAME_LEN, KM_SLEEP);
+	source = kmem_alloc(MAXNAMELEN + strlen(MOS_DIR_NAME) + 1, KM_SLEEP);
 	VERIFY(nvlist_alloc(nvp, NV_UNIQUE_NAME, KM_SLEEP) == 0);
 
 	for (dd = startdd; dd != NULL; dd = dd->dd_parent) {
 		nvlist_t *sp_nvp;
 		uint64_t n;
 
-		if (dsl_dir_phys(dd)->dd_deleg_zapobj == 0 ||
-		    zap_count(mos,
-		    dsl_dir_phys(dd)->dd_deleg_zapobj, &n) != 0 || n == 0)
+		if (dd->dd_phys->dd_deleg_zapobj == 0 ||
+		    zap_count(mos, dd->dd_phys->dd_deleg_zapobj, &n) != 0 ||
+		    n == 0)
 			continue;
 
 		sp_nvp = fnvlist_alloc();
 		for (zap_cursor_init(basezc, mos,
-		    dsl_dir_phys(dd)->dd_deleg_zapobj);
+		    dd->dd_phys->dd_deleg_zapobj);
 		    zap_cursor_retrieve(basezc, baseza) == 0;
 		    zap_cursor_advance(basezc)) {
 			nvlist_t *perms_nvp;
@@ -370,7 +370,7 @@ dsl_deleg_get(const char *ddname, nvlist_t **nvp)
 		nvlist_free(sp_nvp);
 	}
 
-	kmem_free(source, ZFS_MAX_DATASET_NAME_LEN);
+	kmem_free(source, MAXNAMELEN + strlen(MOS_DIR_NAME) + 1);
 	kmem_free(baseza, sizeof (zap_attribute_t));
 	kmem_free(basezc, sizeof (zap_cursor_t));
 	kmem_free(za, sizeof (zap_attribute_t));
@@ -393,13 +393,14 @@ typedef struct perm_set {
 static int
 perm_set_compare(const void *arg1, const void *arg2)
 {
-	const perm_set_t *node1 = (const perm_set_t *)arg1;
-	const perm_set_t *node2 = (const perm_set_t *)arg2;
+	const perm_set_t *node1 = arg1;
+	const perm_set_t *node2 = arg2;
 	int val;
 
 	val = strcmp(node1->p_setname, node2->p_setname);
-
-	return (AVL_ISIGN(val));
+	if (val == 0)
+		return (0);
+	return (val > 0 ? 1 : -1);
 }
 
 /*
@@ -569,7 +570,7 @@ dsl_deleg_access_impl(dsl_dataset_t *ds, const char *perm, cred_t *cr)
 	    SPA_VERSION_DELEGATED_PERMS)
 		return (SET_ERROR(EPERM));
 
-	if (ds->ds_is_snapshot) {
+	if (dsl_dataset_is_snapshot(ds)) {
 		/*
 		 * Snapshots are treated as descendents only,
 		 * local permissions do not apply.
@@ -602,7 +603,7 @@ dsl_deleg_access_impl(dsl_dataset_t *ds, const char *perm, cred_t *cr)
 			if (!zoned)
 				break;
 		}
-		zapobj = dsl_dir_phys(dd)->dd_deleg_zapobj;
+		zapobj = dd->dd_phys->dd_deleg_zapobj;
 
 		if (zapobj == 0)
 			continue;
@@ -681,7 +682,7 @@ copy_create_perms(dsl_dir_t *dd, uint64_t pzapobj,
 {
 	objset_t *mos = dd->dd_pool->dp_meta_objset;
 	uint64_t jumpobj, pjumpobj;
-	uint64_t zapobj = dsl_dir_phys(dd)->dd_deleg_zapobj;
+	uint64_t zapobj = dd->dd_phys->dd_deleg_zapobj;
 	zap_cursor_t zc;
 	zap_attribute_t za;
 	char whokey[ZFS_MAX_DELEG_NAME];
@@ -694,7 +695,7 @@ copy_create_perms(dsl_dir_t *dd, uint64_t pzapobj,
 
 	if (zapobj == 0) {
 		dmu_buf_will_dirty(dd->dd_dbuf, tx);
-		zapobj = dsl_dir_phys(dd)->dd_deleg_zapobj = zap_create(mos,
+		zapobj = dd->dd_phys->dd_deleg_zapobj = zap_create(mos,
 		    DMU_OT_DSL_PERMS, DMU_OT_NONE, 0, tx);
 	}
 
@@ -732,7 +733,7 @@ dsl_deleg_set_create_perms(dsl_dir_t *sdd, dmu_tx_t *tx, cred_t *cr)
 		return;
 
 	for (dd = sdd->dd_parent; dd != NULL; dd = dd->dd_parent) {
-		uint64_t pzapobj = dsl_dir_phys(dd)->dd_deleg_zapobj;
+		uint64_t pzapobj = dd->dd_phys->dd_deleg_zapobj;
 
 		if (pzapobj == 0)
 			continue;

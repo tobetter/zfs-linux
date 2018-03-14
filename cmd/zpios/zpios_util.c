@@ -1,7 +1,7 @@
 /*
  *  ZPIOS is a heavily modified version of the original PIOS test code.
  *  It is designed to have the test code running in the Linux kernel
- *  against ZFS while still being flexibly controlled from user space.
+ *  against ZFS while still being flexibly controled from user space.
  *
  *  Copyright (C) 2008-2010 Lawrence Livermore National Security, LLC.
  *  Produced at Lawrence Livermore National Laboratory (cf, DISCLAIMER).
@@ -29,8 +29,6 @@
  *
  *  You should have received a copy of the GNU General Public License along
  *  with ZPIOS.  If not, see <http://www.gnu.org/licenses/>.
- *
- *  Copyright (c) 2015, Intel Corporation.
  */
 
 #include <stdlib.h>
@@ -143,7 +141,7 @@ regex_match(const char *string, char *pattern)
 		return (rc);
 	}
 
-	rc = regexec(&re, string, (size_t)0, NULL, 0);
+	rc = regexec(&re, string, (size_t) 0, NULL, 0);
 	regfree(&re);
 
 	return (rc);
@@ -170,11 +168,8 @@ split_string(const char *optarg, char *pattern, range_repeat_t *range)
 		 * value of the * first  argument, starts searching from the
 		 * saved pointer and behaves as described above.
 		 */
-		if (i == 0) {
-			token[i] = strtok(cp, comma);
-		} else {
-			token[i] = strtok(NULL, comma);
-		}
+		token[i] = strtok(cp, comma);
+		cp = NULL;
 	} while ((token[i++] != NULL) && (i < 32));
 
 	range->val_count = i - 1;
@@ -190,8 +185,6 @@ int
 set_count(char *pattern1, char *pattern2, range_repeat_t *range,
     char *optarg, uint32_t *flags, char *arg)
 {
-	uint64_t count = range->val_count;
-
 	if (flags)
 		*flags |= FLAG_SET;
 
@@ -204,9 +197,6 @@ set_count(char *pattern1, char *pattern2, range_repeat_t *range,
 		fprintf(stderr, "Error: Incorrect pattern for %s, '%s'\n",
 		    arg, optarg);
 		return (EINVAL);
-	} else if (count == range->val_count) {
-		fprintf(stderr, "Error: input ignored for %s, '%s'\n",
-		    arg, optarg);
 	}
 
 	return (0);
@@ -224,7 +214,7 @@ set_lhi(char *pattern, range_repeat_t *range, char *optarg,
 
 	if ((rc = regex_match(optarg, pattern))) {
 		fprintf(stderr, "Error: Wrong pattern in %s, '%s'\n",
-		    arg, optarg);
+			arg, optarg);
 		return (rc);
 	}
 
@@ -263,13 +253,12 @@ set_noise(uint64_t *noise, char *optarg, char *arg)
 int
 set_load_params(cmd_args_t *args, char *optarg)
 {
-	char *param, *search, *searchdup, comma[] = ",";
+	char *param, *search, comma[] = ",";
 	int rc = 0;
 
 	search = strdup(optarg);
 	if (search == NULL)
 		return (ENOMEM);
-	searchdup = search;
 
 	while ((param = strtok(search, comma)) != NULL) {
 		search = NULL;
@@ -287,7 +276,7 @@ set_load_params(cmd_args_t *args, char *optarg)
 		}
 	}
 
-	free(searchdup);
+	free(search);
 
 	return (rc);
 }
@@ -325,14 +314,14 @@ print_stats_header(cmd_args_t *args)
 	if (args->verbose) {
 		printf(
 		    "status    name        id\tth-cnt\trg-cnt\trg-sz\t"
-		    "ch-sz\toffset\trg-no\tch-no\tth-dly\tflags\tblksz\ttime\t"
+		    "ch-sz\toffset\trg-no\tch-no\tth-dly\tflags\ttime\t"
 		    "cr-time\trm-time\twr-time\trd-time\twr-data\twr-ch\t"
 		    "wr-bw\trd-data\trd-ch\trd-bw\n");
 		printf(
-		    "-------------------------------------------------"
-		    "-------------------------------------------------"
-		    "-------------------------------------------------"
-		    "--------------------------------------------------\n");
+		    "------------------------------------------------"
+		    "------------------------------------------------"
+		    "------------------------------------------------"
+		    "----------------------------------------------\n");
 	} else {
 		printf(
 		    "status    name        id\t"
@@ -369,7 +358,6 @@ print_stats_human_readable(cmd_args_t *args, zpios_cmd_t *cmd)
 		printf("%s\t", uint64_to_kmgt(str, cmd->cmd_chunk_noise));
 		printf("%s\t", uint64_to_kmgt(str, cmd->cmd_thread_delay));
 		printf("%s\t", print_flags(str, cmd->cmd_flags));
-		printf("%s\t", uint64_to_kmgt(str, cmd->cmd_block_size));
 	}
 
 	if (args->rc) {
@@ -426,7 +414,6 @@ print_stats_table(cmd_args_t *args, zpios_cmd_t *cmd)
 		printf("%u\t", cmd->cmd_chunk_noise);
 		printf("%u\t", cmd->cmd_thread_delay);
 		printf("0x%x\t", cmd->cmd_flags);
-		printf("%u\t", cmd->cmd_block_size);
 	}
 
 	if (args->rc) {

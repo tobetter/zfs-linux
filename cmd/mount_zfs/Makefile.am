@@ -12,7 +12,7 @@ sbindir=$(mounthelperdir)
 sbin_PROGRAMS = mount.zfs
 
 mount_zfs_SOURCES = \
-	mount_zfs.c
+	$(top_srcdir)/cmd/mount_zfs/mount_zfs.c
 
 mount_zfs_LDADD = \
 	$(top_builddir)/lib/libnvpair/libnvpair.la \

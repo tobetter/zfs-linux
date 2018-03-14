@@ -54,7 +54,7 @@ extern "C" {
  * a DVA.  These are buffers that hold dirty block copies
  * before they are written to stable storage.  By definition,
  * they are "ref'd" and are considered part of arc_mru
- * that cannot be freed.  Generally, they will acquire a DVA
+ * that cannot be freed.  Generally, they will aquire a DVA
  * as they are written and migrate onto the arc_mru list.
  *
  * The ARC_l2c_only state is for buffers that are in the second
@@ -67,24 +67,14 @@ extern "C" {
  */
 
 typedef struct arc_state {
-	/*
-	 * list of evictable buffers
-	 */
-	multilist_t *arcs_list[ARC_BUFC_NUMTYPES];
-	/*
-	 * total amount of evictable data in this state
-	 */
-	refcount_t arcs_esize[ARC_BUFC_NUMTYPES];
-	/*
-	 * total amount of data in this state; this includes: evictable,
-	 * non-evictable, ARC_BUFC_DATA, and ARC_BUFC_METADATA.
-	 */
-	refcount_t arcs_size;
-	/*
-	 * supports the "dbufs" kstat
-	 */
+	list_t	arcs_list[ARC_BUFC_NUMTYPES];	/* list of evictable buffers */
+	uint64_t arcs_lsize[ARC_BUFC_NUMTYPES];	/* amount of evictable data */
+	uint64_t arcs_size;	/* total amount of data in this state */
+	kmutex_t arcs_mtx;
 	arc_state_type_t arcs_state;
 } arc_state_t;
+
+typedef struct l2arc_buf_hdr l2arc_buf_hdr_t;
 
 typedef struct arc_callback arc_callback_t;
 
@@ -92,7 +82,6 @@ struct arc_callback {
 	void			*acb_private;
 	arc_done_func_t		*acb_done;
 	arc_buf_t		*acb_buf;
-	boolean_t		acb_compressed;
 	zio_t			*acb_zio_dummy;
 	arc_callback_t		*acb_next;
 };
@@ -102,57 +91,36 @@ typedef struct arc_write_callback arc_write_callback_t;
 struct arc_write_callback {
 	void		*awcb_private;
 	arc_done_func_t	*awcb_ready;
-	arc_done_func_t	*awcb_children_ready;
 	arc_done_func_t	*awcb_physdone;
 	arc_done_func_t	*awcb_done;
 	arc_buf_t	*awcb_buf;
 };
 
-/*
- * ARC buffers are separated into multiple structs as a memory saving measure:
- *   - Common fields struct, always defined, and embedded within it:
- *       - L2-only fields, always allocated but undefined when not in L2ARC
- *       - L1-only fields, only allocated when in L1ARC
- *
- *           Buffer in L1                     Buffer only in L2
- *    +------------------------+          +------------------------+
- *    | arc_buf_hdr_t          |          | arc_buf_hdr_t          |
- *    |                        |          |                        |
- *    |                        |          |                        |
- *    |                        |          |                        |
- *    +------------------------+          +------------------------+
- *    | l2arc_buf_hdr_t        |          | l2arc_buf_hdr_t        |
- *    | (undefined if L1-only) |          |                        |
- *    +------------------------+          +------------------------+
- *    | l1arc_buf_hdr_t        |
- *    |                        |
- *    |                        |
- *    |                        |
- *    |                        |
- *    +------------------------+
- *
- * Because it's possible for the L2ARC to become extremely large, we can wind
- * up eating a lot of memory in L2ARC buffer headers, so the size of a header
- * is minimized by only allocating the fields necessary for an L1-cached buffer
- * when a header is actually in the L1 cache. The sub-headers (l1arc_buf_hdr and
- * l2arc_buf_hdr) are embedded rather than allocated separately to save a couple
- * words in pointers. arc_hdr_realloc() is used to switch a header between
- * these two allocation states.
- */
-typedef struct l1arc_buf_hdr {
+struct arc_buf_hdr {
+	/* protected by hash lock */
+	dva_t			b_dva;
+	uint64_t		b_birth;
+	uint64_t		b_cksum0;
+
 	kmutex_t		b_freeze_lock;
 	zio_cksum_t		*b_freeze_cksum;
 
+	arc_buf_hdr_t		*b_hash_next;
 	arc_buf_t		*b_buf;
-	uint32_t		b_bufcnt;
-	/* for waiting on writes to complete */
-	kcondvar_t		b_cv;
-	uint8_t			b_byteswap;
+	uint32_t		b_flags;
+	uint32_t		b_datacnt;
 
+	arc_callback_t		*b_acb;
+	kcondvar_t		b_cv;
+
+	/* immutable */
+	arc_buf_contents_t	b_type;
+	uint64_t		b_size;
+	uint64_t		b_spa;
 
 	/* protected by arc state mutex */
 	arc_state_t		*b_state;
-	multilist_node_t	b_arc_node;
+	list_node_t		b_arc_node;
 
 	/* updated atomically */
 	clock_t			b_arc_access;
@@ -165,9 +133,9 @@ typedef struct l1arc_buf_hdr {
 	/* self protecting */
 	refcount_t		b_refcnt;
 
-	arc_callback_t		*b_acb;
-	abd_t			*b_pabd;
-} l1arc_buf_hdr_t;
+	l2arc_buf_hdr_t		*b_l2hdr;
+	list_node_t		b_l2node;
+};
 
 typedef struct l2arc_dev {
 	vdev_t			*l2ad_vdev;	/* vdev */
@@ -175,69 +143,18 @@ typedef struct l2arc_dev {
 	uint64_t		l2ad_hand;	/* next write location */
 	uint64_t		l2ad_start;	/* first addr on device */
 	uint64_t		l2ad_end;	/* last addr on device */
+	uint64_t		l2ad_evict;	/* last addr eviction reached */
 	boolean_t		l2ad_first;	/* first sweep through */
 	boolean_t		l2ad_writing;	/* currently writing */
-	kmutex_t		l2ad_mtx;	/* lock for buffer list */
-	list_t			l2ad_buflist;	/* buffer list */
+	list_t			*l2ad_buflist;	/* buffer list */
 	list_node_t		l2ad_node;	/* device list node */
-	refcount_t		l2ad_alloc;	/* allocated bytes */
 } l2arc_dev_t;
-
-typedef struct l2arc_buf_hdr {
-	/* protected by arc_buf_hdr mutex */
-	l2arc_dev_t		*b_dev;		/* L2ARC device */
-	uint64_t		b_daddr;	/* disk address, offset byte */
-	uint32_t		b_hits;
-
-	list_node_t		b_l2node;
-} l2arc_buf_hdr_t;
 
 typedef struct l2arc_write_callback {
 	l2arc_dev_t	*l2wcb_dev;		/* device info */
 	arc_buf_hdr_t	*l2wcb_head;		/* head of write buflist */
 } l2arc_write_callback_t;
 
-struct arc_buf_hdr {
-	/* protected by hash lock */
-	dva_t			b_dva;
-	uint64_t		b_birth;
-
-	arc_buf_contents_t	b_type;
-	arc_buf_hdr_t		*b_hash_next;
-	arc_flags_t		b_flags;
-
-	/*
-	 * This field stores the size of the data buffer after
-	 * compression, and is set in the arc's zio completion handlers.
-	 * It is in units of SPA_MINBLOCKSIZE (e.g. 1 == 512 bytes).
-	 *
-	 * While the block pointers can store up to 32MB in their psize
-	 * field, we can only store up to 32MB minus 512B. This is due
-	 * to the bp using a bias of 1, whereas we use a bias of 0 (i.e.
-	 * a field of zeros represents 512B in the bp). We can't use a
-	 * bias of 1 since we need to reserve a psize of zero, here, to
-	 * represent holes and embedded blocks.
-	 *
-	 * This isn't a problem in practice, since the maximum size of a
-	 * buffer is limited to 16MB, so we never need to store 32MB in
-	 * this field. Even in the upstream illumos code base, the
-	 * maximum size of a buffer is limited to 16MB.
-	 */
-	uint16_t		b_psize;
-
-	/*
-	 * This field stores the size of the data buffer before
-	 * compression, and cannot change once set. It is in units
-	 * of SPA_MINBLOCKSIZE (e.g. 2 == 1024 bytes)
-	 */
-	uint16_t		b_lsize;	/* immutable */
-	uint64_t		b_spa;		/* immutable */
-
-	/* L2ARC fields. Undefined when not in L2ARC. */
-	l2arc_buf_hdr_t		b_l2hdr;
-	/* L1ARC fields. Undefined when in l2arc_only state */
-	l1arc_buf_hdr_t		b_l1hdr;
-};
 #ifdef __cplusplus
 }
 #endif

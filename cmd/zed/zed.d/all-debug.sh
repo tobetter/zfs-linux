@@ -2,23 +2,16 @@
 #
 # Log all environment variables to ZED_DEBUG_LOG.
 #
-# This can be a useful aid when developing/debugging ZEDLETs since it shows the
-# environment variables defined for each zevent.
+test -f "${ZED_ZEDLET_DIR}/zed.rc" && . "${ZED_ZEDLET_DIR}/zed.rc"
 
-[ -f "${ZED_ZEDLET_DIR}/zed.rc" ] && . "${ZED_ZEDLET_DIR}/zed.rc"
-. "${ZED_ZEDLET_DIR}/zed-functions.sh"
-
-: "${ZED_DEBUG_LOG:="${TMPDIR:="/tmp"}/zed.debug.log"}"
-
-lockfile="$(basename -- "${ZED_DEBUG_LOG}").lock"
-
+# Override the default umask to restrict access to a newly-created logfile.
 umask 077
-zed_lock "${lockfile}"
-exec >> "${ZED_DEBUG_LOG}"
+
+# Append stdout to the logfile after obtaining an advisory lock.
+exec >> "${ZED_DEBUG_LOG:=/tmp/zed.debug.log}"
+flock -x 1
 
 printenv | sort
 echo
 
-exec >&-
-zed_unlock "${lockfile}"
 exit 0

@@ -475,8 +475,7 @@ NVLIST_PRINTCTL_AREPLACE(nvlist_array, nvlist_t **)
  */
 
 
-static const struct nvlist_printops defprtops =
-{
+static const struct nvlist_printops defprtops = {
 	{ nvprint_boolean, NULL },
 	{ nvprint_boolean_value, NULL },
 	{ nvprint_byte, NULL },

@@ -1,15 +1,27 @@
 /*
- * This file is part of the ZFS Event Daemon (ZED)
- * for ZFS on Linux (ZoL) <http://zfsonlinux.org/>.
- * Developed at Lawrence Livermore National Laboratory (LLNL-CODE-403049).
- * Copyright (C) 2013-2014 Lawrence Livermore National Security, LLC.
- * Refer to the ZoL git commit log for authoritative copyright attribution.
+ * CDDL HEADER START
  *
  * The contents of this file are subject to the terms of the
- * Common Development and Distribution License Version 1.0 (CDDL-1.0).
- * You can obtain a copy of the license from the top-level file
- * "OPENSOLARIS.LICENSE" or at <http://opensource.org/licenses/CDDL-1.0>.
- * You may not use this file except in compliance with the license.
+ * Common Development and Distribution License (the "License").
+ * You may not use this file except in compliance with the License.
+ *
+ * You can obtain a copy of the license from the top-level
+ * OPENSOLARIS.LICENSE or <http://opensource.org/licenses/CDDL-1.0>.
+ * See the License for the specific language governing permissions
+ * and limitations under the License.
+ *
+ * When distributing Covered Code, include this CDDL HEADER in each file
+ * and include the License file from the top-level OPENSOLARIS.LICENSE.
+ * If applicable, add the following below this CDDL HEADER, with the
+ * fields enclosed by brackets "[]" replaced with your own identifying
+ * information: Portions Copyright [yyyy] [name of copyright owner]
+ *
+ * CDDL HEADER END
+ */
+
+/*
+ * Developed at Lawrence Livermore National Laboratory (LLNL-CODE-403049).
+ * Copyright (C) 2013-2014 Lawrence Livermore National Security, LLC.
  */
 
 #include <assert.h>
@@ -20,7 +32,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #include "zed_file.h"
 #include "zed_log.h"
@@ -54,7 +65,7 @@ _zed_exec_create_env(zed_strings_t *zsp)
 	if (!buf)
 		return (NULL);
 
-	pp = (char **)buf;
+	pp = (char **) buf;
 	p = buf + (num_ptrs * sizeof (char *));
 	i = 0;
 	for (q = zed_strings_first(zsp); q; q = zed_strings_next(zsp)) {
@@ -66,12 +77,12 @@ _zed_exec_create_env(zed_strings_t *zsp)
 	}
 	pp[i] = NULL;
 	assert(buf + buflen == p);
-	return ((char **)buf);
+	return ((char **) buf);
 }
 
 /*
  * Fork a child process to handle event [eid].  The program [prog]
- * in directory [dir] is executed with the environment [env].
+ * in directory [dir] is executed with the envionment [env].
  *
  * The file descriptor [zfd] is the zevent_fd used to track the
  * current cursor location within the zevent nvlist.
@@ -107,48 +118,27 @@ _zed_exec_fork_child(uint64_t eid, const char *dir, const char *prog,
 		return;
 	} else if (pid == 0) {
 		(void) umask(022);
-		if ((fd = open("/dev/null", O_RDWR)) != -1) {
-			(void) dup2(fd, STDIN_FILENO);
-			(void) dup2(fd, STDOUT_FILENO);
-			(void) dup2(fd, STDERR_FILENO);
-		}
+		fd = open("/dev/null", O_RDWR);
+		(void) dup2(fd, STDIN_FILENO);
+		(void) dup2(fd, STDOUT_FILENO);
+		(void) dup2(fd, STDERR_FILENO);
 		(void) dup2(zfd, ZEVENT_FILENO);
 		zed_file_close_from(ZEVENT_FILENO + 1);
 		execle(path, prog, NULL, env);
 		_exit(127);
-	}
-
-	/* parent process */
-
-	zed_log_msg(LOG_INFO, "Invoking \"%s\" eid=%llu pid=%d",
-	    prog, eid, pid);
-
-	/* FIXME: Timeout rogue child processes with sigalarm? */
-
-	/*
-	 * Wait for child process using WNOHANG to limit
-	 * the time spent waiting to 10 seconds (10,000ms).
-	 */
-	for (n = 0; n < 1000; n++) {
-		wpid = waitpid(pid, &status, WNOHANG);
-		if (wpid == (pid_t)-1) {
+	} else {
+		zed_log_msg(LOG_INFO, "Invoking \"%s\" eid=%llu pid=%d",
+		    prog, eid, pid);
+		/* FIXME: Timeout rogue child processes with sigalarm? */
+restart:
+		wpid = waitpid(pid, &status, 0);
+		if (wpid == (pid_t) -1) {
 			if (errno == EINTR)
-				continue;
+				goto restart;
 			zed_log_msg(LOG_WARNING,
 			    "Failed to wait for \"%s\" eid=%llu pid=%d",
 			    prog, eid, pid);
-			break;
-		} else if (wpid == 0) {
-			struct timespec t;
-
-			/* child still running */
-			t.tv_sec = 0;
-			t.tv_nsec = 10000000;	/* 10ms */
-			(void) nanosleep(&t, NULL);
-			continue;
-		}
-
-		if (WIFEXITED(status)) {
+		} else if (WIFEXITED(status)) {
 			zed_log_msg(LOG_INFO,
 			    "Finished \"%s\" eid=%llu pid=%d exit=%d",
 			    prog, eid, pid, WEXITSTATUS(status));
@@ -162,16 +152,6 @@ _zed_exec_fork_child(uint64_t eid, const char *dir, const char *prog,
 			    "Finished \"%s\" eid=%llu pid=%d status=0x%X",
 			    prog, eid, (unsigned int) status);
 		}
-		break;
-	}
-
-	/*
-	 * kill child process after 10 seconds
-	 */
-	if (wpid == 0) {
-		zed_log_msg(LOG_WARNING, "Killing hung \"%s\" pid=%d",
-		    prog, pid);
-		(void) kill(pid, SIGKILL);
 	}
 }
 

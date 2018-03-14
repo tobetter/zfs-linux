@@ -82,6 +82,7 @@ cols = {
     "mrug":       [4, 1000, "MRU Ghost List hits per second"],
     "eskip":      [5, 1000, "evict_skip per second"],
     "mtxmis":     [6, 1000, "mutex_miss per second"],
+    "rmis":       [4, 1000, "recycle_miss per second"],
     "dread":      [5, 1000, "Demand accesses per second"],
     "pread":      [5, 1000, "Prefetch accesses per second"],
     "l2hits":     [6, 1000, "L2ARC hits per second"],
@@ -97,8 +98,8 @@ cols = {
 v = {}
 hdr = ["time", "read", "miss", "miss%", "dmis", "dm%", "pmis", "pm%", "mmis",
        "mm%", "arcsz", "c"]
-xhdr = ["time", "mfu", "mru", "mfug", "mrug", "eskip", "mtxmis", "dread",
-        "pread", "read"]
+xhdr = ["time", "mfu", "mru", "mfug", "mrug", "eskip", "mtxmis", "rmis",
+        "dread", "pread", "read"]
 sint = 1               # Default interval is 1 second
 count = 1              # Default count is 1
 hdr_intr = 20          # Print header every 20 lines of output
@@ -122,7 +123,7 @@ def detailed_usage():
         sys.stderr.write("%11s : %s\n" % (key, cols[key][2]))
     sys.stderr.write("\n")
 
-    sys.exit(0)
+    sys.exit(1)
 
 
 def usage():
@@ -219,7 +220,6 @@ def print_values():
             sep
         ))
     sys.stdout.write("\n")
-    sys.stdout.flush()
 
 
 def print_header():
@@ -230,18 +230,14 @@ def print_header():
         sys.stdout.write("%*s%s" % (cols[col][0], col, sep))
     sys.stdout.write("\n")
 
-
 def get_terminal_lines():
     try:
-        import fcntl
-        import termios
-        import struct
+        import fcntl, termios, struct
         data = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, '1234')
         sz = struct.unpack('hh', data)
         return sz[0]
-    except Exception:
+    except:
         pass
-
 
 def update_hdr_intr():
     global hdr_intr
@@ -249,7 +245,6 @@ def update_hdr_intr():
     lines = get_terminal_lines()
     if lines and lines > 3:
         hdr_intr = lines - 3
-
 
 def resize_handler(signum, frame):
     update_hdr_intr()
@@ -411,6 +406,7 @@ def calculate():
     v["mrug"] = d["mru_ghost_hits"] / sint
     v["mfug"] = d["mfu_ghost_hits"] / sint
     v["eskip"] = d["evict_skip"] / sint
+    v["rmis"] = d["recycle_miss"] / sint
     v["mtxmis"] = d["mutex_miss"] / sint
 
     if l2exist:

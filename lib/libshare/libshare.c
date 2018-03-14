@@ -108,13 +108,12 @@ libshare_init(void)
 }
 
 static void
-parse_sharetab(sa_handle_impl_t impl_handle)
-{
+parse_sharetab(sa_handle_impl_t impl_handle) {
 	FILE *fp;
 	char line[512];
 	char *eol, *pathname, *resource, *fstype, *options, *description;
 
-	fp = fopen(ZFS_SHARETAB, "r");
+	fp = fopen("/etc/dfs/sharetab", "r");
 
 	if (fp == NULL)
 		return;
@@ -171,7 +170,7 @@ update_sharetab(sa_handle_impl_t impl_handle)
 	sa_share_impl_t impl_share;
 	int temp_fd;
 	FILE *temp_fp;
-	char tempfile[] = ZFS_SHARETAB".XXXXXX";
+	char tempfile[] = "/etc/dfs/sharetab.XXXXXX";
 	sa_fstype_t *fstype;
 	const char *resource;
 
@@ -216,7 +215,7 @@ update_sharetab(sa_handle_impl_t impl_handle)
 	fsync(temp_fd);
 	fclose(temp_fp);
 
-	(void) rename(tempfile, ZFS_SHARETAB);
+	rename(tempfile, "/etc/dfs/sharetab");
 }
 
 typedef struct update_cookie_s {
@@ -493,9 +492,19 @@ int
 sa_enable_share(sa_share_t share, char *protocol)
 {
 	sa_share_impl_t impl_share = (sa_share_impl_t)share;
-	int rc, ret = SA_OK;
-	boolean_t found_protocol = B_FALSE;
+	int rc, ret;
+	boolean_t found_protocol;
 	sa_fstype_t *fstype;
+
+#ifdef DEBUG
+	fprintf(stderr, "sa_enable_share: share->sharepath=%s, protocol=%s\n",
+		impl_share->sharepath, protocol);
+#endif
+
+	assert(impl_share->handle != NULL);
+
+	ret = SA_OK;
+	found_protocol = B_FALSE;
 
 	fstype = fstypes;
 	while (fstype != NULL) {
@@ -524,9 +533,17 @@ int
 sa_disable_share(sa_share_t share, char *protocol)
 {
 	sa_share_impl_t impl_share = (sa_share_impl_t)share;
-	int rc, ret = SA_OK;
-	boolean_t found_protocol = B_FALSE;
+	int rc, ret;
+	boolean_t found_protocol;
 	sa_fstype_t *fstype;
+
+#ifdef DEBUG
+	fprintf(stderr, "sa_disable_share: share->sharepath=%s, protocol=%s\n",
+		impl_share->sharepath, protocol);
+#endif
+
+	ret = SA_OK;
+	found_protocol = B_FALSE;
 
 	fstype = fstypes;
 	while (fstype != NULL) {
@@ -678,6 +695,11 @@ sa_parse_legacy_options(sa_group_t group, char *options, char *proto)
 {
 	sa_fstype_t *fstype;
 
+#ifdef DEBUG
+	fprintf(stderr, "sa_parse_legacy_options: options=%s, proto=%s\n",
+		options, proto);
+#endif
+
 	fstype = fstypes;
 	while (fstype != NULL) {
 		if (strcmp(fstype->name, proto) != 0) {
@@ -737,8 +759,7 @@ alloc_share(const char *sharepath)
 }
 
 static void
-free_share(sa_share_impl_t impl_share)
-{
+free_share(sa_share_impl_t impl_share) {
 	sa_fstype_t *fstype;
 
 	fstype = fstypes;
@@ -763,6 +784,12 @@ sa_zfs_process_share(sa_handle_t handle, sa_group_t group, sa_share_t share,
 {
 	sa_handle_impl_t impl_handle = (sa_handle_impl_t)handle;
 	sa_share_impl_t impl_share = (sa_share_impl_t)share;
+
+#ifdef DEBUG
+	fprintf(stderr, "sa_zfs_process_share: mountpoint=%s, proto=%s, "
+	    "shareopts=%s, sourcestr=%s, dataset=%s\n", mountpoint, proto,
+	    shareopts, sourcestr, dataset);
+#endif
 
 	return (process_share(impl_handle, impl_share, mountpoint, NULL,
 	    proto, shareopts, NULL, dataset, B_FALSE));

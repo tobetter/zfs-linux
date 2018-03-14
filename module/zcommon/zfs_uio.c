@@ -35,9 +35,6 @@
  * software developed by the University of California, Berkeley, and its
  * contributors.
  */
-/*
- * Copyright (c) 2015 by Chunwei Chen. All rights reserved.
- */
 
 /*
  * The uio support from OpenSolaris has been added as a short term
@@ -49,7 +46,6 @@
 
 #include <sys/types.h>
 #include <sys/uio_impl.h>
-#include <linux/kmap_compat.h>
 
 /*
  * Move "n" bytes at byte address "p"; "rw" indicates the direction
@@ -57,15 +53,20 @@
  * update to reflect the data which was moved.  Returns 0 on success or
  * a non-zero errno on failure.
  */
-static int
-uiomove_iov(void *p, size_t n, enum uio_rw rw, struct uio *uio)
+int
+uiomove(void *p, size_t n, enum uio_rw rw, struct uio *uio)
 {
-	const struct iovec *iov = uio->uio_iov;
-	size_t skip = uio->uio_skip;
+	struct iovec *iov;
 	ulong_t cnt;
 
 	while (n && uio->uio_resid) {
-		cnt = MIN(iov->iov_len - skip, n);
+		iov = uio->uio_iov;
+		cnt = MIN(iov->iov_len, n);
+		if (cnt == 0l) {
+			uio->uio_iov++;
+			uio->uio_iovcnt--;
+			continue;
+		}
 		switch (uio->uio_segflg) {
 		case UIO_USERSPACE:
 		case UIO_USERISPACE:
@@ -74,77 +75,28 @@ uiomove_iov(void *p, size_t n, enum uio_rw rw, struct uio *uio)
 			 * iov->iov_base = user data pointer
 			 */
 			if (rw == UIO_READ) {
-				if (copy_to_user(iov->iov_base+skip, p, cnt))
+				if (copy_to_user(iov->iov_base, p, cnt))
 					return (EFAULT);
 			} else {
-				if (copy_from_user(p, iov->iov_base+skip, cnt))
+				if (copy_from_user(p, iov->iov_base, cnt))
 					return (EFAULT);
 			}
 			break;
 		case UIO_SYSSPACE:
 			if (rw == UIO_READ)
-				bcopy(p, iov->iov_base + skip, cnt);
+				bcopy(p, iov->iov_base, cnt);
 			else
-				bcopy(iov->iov_base + skip, p, cnt);
+				bcopy(iov->iov_base, p, cnt);
 			break;
-		default:
-			ASSERT(0);
 		}
-		skip += cnt;
-		if (skip == iov->iov_len) {
-			skip = 0;
-			uio->uio_iov = (++iov);
-			uio->uio_iovcnt--;
-		}
-		uio->uio_skip = skip;
+		iov->iov_base += cnt;
+		iov->iov_len -= cnt;
 		uio->uio_resid -= cnt;
 		uio->uio_loffset += cnt;
 		p = (caddr_t)p + cnt;
 		n -= cnt;
 	}
 	return (0);
-}
-
-static int
-uiomove_bvec(void *p, size_t n, enum uio_rw rw, struct uio *uio)
-{
-	const struct bio_vec *bv = uio->uio_bvec;
-	size_t skip = uio->uio_skip;
-	ulong_t cnt;
-
-	while (n && uio->uio_resid) {
-		void *paddr;
-		cnt = MIN(bv->bv_len - skip, n);
-
-		paddr = zfs_kmap_atomic(bv->bv_page, KM_USER1);
-		if (rw == UIO_READ)
-			bcopy(p, paddr + bv->bv_offset + skip, cnt);
-		else
-			bcopy(paddr + bv->bv_offset + skip, p, cnt);
-		zfs_kunmap_atomic(paddr, KM_USER1);
-
-		skip += cnt;
-		if (skip == bv->bv_len) {
-			skip = 0;
-			uio->uio_bvec = (++bv);
-			uio->uio_iovcnt--;
-		}
-		uio->uio_skip = skip;
-		uio->uio_resid -= cnt;
-		uio->uio_loffset += cnt;
-		p = (caddr_t)p + cnt;
-		n -= cnt;
-	}
-	return (0);
-}
-
-int
-uiomove(void *p, size_t n, enum uio_rw rw, struct uio *uio)
-{
-	if (uio->uio_segflg != UIO_BVEC)
-		return (uiomove_iov(p, n, rw, uio));
-	else
-		return (uiomove_bvec(p, n, rw, uio));
 }
 EXPORT_SYMBOL(uiomove);
 
@@ -159,42 +111,39 @@ EXPORT_SYMBOL(uiomove);
 void
 uio_prefaultpages(ssize_t n, struct uio *uio)
 {
-	const struct iovec *iov;
+	struct iovec *iov;
 	ulong_t cnt, incr;
 	caddr_t p;
 	uint8_t tmp;
 	int iovcnt;
-	size_t skip;
-
-	/* no need to fault in kernel pages */
-	switch (uio->uio_segflg) {
-		case UIO_SYSSPACE:
-		case UIO_BVEC:
-			return;
-		case UIO_USERSPACE:
-		case UIO_USERISPACE:
-			break;
-		default:
-			ASSERT(0);
-	}
 
 	iov = uio->uio_iov;
 	iovcnt = uio->uio_iovcnt;
-	skip = uio->uio_skip;
 
-	for (; n > 0 && iovcnt > 0; iov++, iovcnt--, skip = 0) {
-		cnt = MIN(iov->iov_len - skip, n);
-		/* empty iov */
-		if (cnt == 0)
+	while ((n > 0) && (iovcnt > 0)) {
+		cnt = MIN(iov->iov_len, n);
+		if (cnt == 0) {
+			/* empty iov entry */
+			iov++;
+			iovcnt--;
 			continue;
+		}
 		n -= cnt;
 		/*
 		 * touch each page in this segment.
 		 */
-		p = iov->iov_base + skip;
+		p = iov->iov_base;
 		while (cnt) {
-			if (fuword8((uint8_t *)p, &tmp))
-				return;
+			switch (uio->uio_segflg) {
+			case UIO_USERSPACE:
+			case UIO_USERISPACE:
+				if (fuword8((uint8_t *) p, &tmp))
+					return;
+				break;
+			case UIO_SYSSPACE:
+				bcopy(p, &tmp, 1);
+				break;
+			}
 			incr = MIN(cnt, PAGESIZE);
 			p += incr;
 			cnt -= incr;
@@ -203,8 +152,18 @@ uio_prefaultpages(ssize_t n, struct uio *uio)
 		 * touch the last byte in case it straddles a page.
 		 */
 		p--;
-		if (fuword8((uint8_t *)p, &tmp))
-			return;
+		switch (uio->uio_segflg) {
+		case UIO_USERSPACE:
+		case UIO_USERISPACE:
+			if (fuword8((uint8_t *) p, &tmp))
+				return;
+			break;
+		case UIO_SYSSPACE:
+			bcopy(p, &tmp, 1);
+			break;
+		}
+		iov++;
+		iovcnt--;
 	}
 }
 EXPORT_SYMBOL(uio_prefaultpages);
@@ -216,13 +175,49 @@ EXPORT_SYMBOL(uio_prefaultpages);
 int
 uiocopy(void *p, size_t n, enum uio_rw rw, struct uio *uio, size_t *cbytes)
 {
-	struct uio uio_copy;
-	int ret;
+	struct iovec *iov;
+	ulong_t cnt;
+	int iovcnt;
 
-	bcopy(uio, &uio_copy, sizeof (struct uio));
-	ret = uiomove(p, n, rw, &uio_copy);
-	*cbytes = uio->uio_resid - uio_copy.uio_resid;
-	return (ret);
+	iovcnt = uio->uio_iovcnt;
+	*cbytes = 0;
+
+	for (iov = uio->uio_iov; n && iovcnt; iov++, iovcnt--) {
+		cnt = MIN(iov->iov_len, n);
+		if (cnt == 0)
+			continue;
+
+		switch (uio->uio_segflg) {
+
+		case UIO_USERSPACE:
+		case UIO_USERISPACE:
+			/*
+			 * p = kernel data pointer
+			 * iov->iov_base = user data pointer
+			 */
+			if (rw == UIO_READ) {
+				/* UIO_READ = copy data from kernel to user */
+				if (copy_to_user(iov->iov_base, p, cnt))
+					return (EFAULT);
+			} else {
+				/* UIO_WRITE = copy data from user to kernel */
+				if (copy_from_user(p, iov->iov_base, cnt))
+					return (EFAULT);
+			}
+			break;
+
+		case UIO_SYSSPACE:
+			if (rw == UIO_READ)
+				bcopy(p, iov->iov_base, cnt);
+			else
+				bcopy(iov->iov_base, p, cnt);
+			break;
+		}
+		p = (caddr_t)p + cnt;
+		n -= cnt;
+		*cbytes += cnt;
+	}
+	return (0);
 }
 EXPORT_SYMBOL(uiocopy);
 
@@ -234,25 +229,21 @@ uioskip(uio_t *uiop, size_t n)
 {
 	if (n > uiop->uio_resid)
 		return;
+	while (n != 0) {
+		iovec_t	*iovp = uiop->uio_iov;
+		size_t		niovb = MIN(iovp->iov_len, n);
 
-	uiop->uio_skip += n;
-	if (uiop->uio_segflg != UIO_BVEC) {
-		while (uiop->uio_iovcnt &&
-		    uiop->uio_skip >= uiop->uio_iov->iov_len) {
-			uiop->uio_skip -= uiop->uio_iov->iov_len;
+		if (niovb == 0) {
 			uiop->uio_iov++;
 			uiop->uio_iovcnt--;
+			continue;
 		}
-	} else {
-		while (uiop->uio_iovcnt &&
-		    uiop->uio_skip >= uiop->uio_bvec->bv_len) {
-			uiop->uio_skip -= uiop->uio_bvec->bv_len;
-			uiop->uio_bvec++;
-			uiop->uio_iovcnt--;
-		}
+		iovp->iov_base += niovb;
+		uiop->uio_loffset += niovb;
+		iovp->iov_len -= niovb;
+		uiop->uio_resid -= niovb;
+		n -= niovb;
 	}
-	uiop->uio_loffset += n;
-	uiop->uio_resid -= n;
 }
 EXPORT_SYMBOL(uioskip);
 #endif /* _KERNEL */

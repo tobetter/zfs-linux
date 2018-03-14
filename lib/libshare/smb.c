@@ -72,7 +72,7 @@ smb_retrieve_shares(void)
 {
 	int rc = SA_OK;
 	char file_path[PATH_MAX], line[512], *token, *key, *value;
-	char *dup_value = NULL, *path = NULL, *comment = NULL, *name = NULL;
+	char *dup_value, *path = NULL, *comment = NULL, *name = NULL;
 	char *guest_ok = NULL;
 	DIR *shares_dir;
 	FILE *share_file_fp = NULL;
@@ -136,48 +136,42 @@ smb_retrieve_shares(void)
 				goto out;
 			}
 
-			if (strcmp(key, "path") == 0) {
-				free(path);
+			if (strcmp(key, "path") == 0)
 				path = dup_value;
-			} else if (strcmp(key, "comment") == 0) {
-				free(comment);
+			if (strcmp(key, "comment") == 0)
 				comment = dup_value;
-			} else if (strcmp(key, "guest_ok") == 0) {
-				free(guest_ok);
+			if (strcmp(key, "guest_ok") == 0)
 				guest_ok = dup_value;
-			} else
-				free(dup_value);
-
-			dup_value = NULL;
 
 			if (path == NULL || comment == NULL || guest_ok == NULL)
 				continue; /* Incomplete share definition */
 			else {
 				shares = (smb_share_t *)
-				    malloc(sizeof (smb_share_t));
+						malloc(sizeof (smb_share_t));
 				if (shares == NULL) {
 					rc = SA_NO_MEMORY;
 					goto out;
 				}
 
-				(void) strlcpy(shares->name, name,
-				    sizeof (shares->name));
+				strncpy(shares->name, name,
+					sizeof (shares->name));
+				shares->name [sizeof (shares->name) - 1] = '\0';
 
-				(void) strlcpy(shares->path, path,
+				strncpy(shares->path, path,
 				    sizeof (shares->path));
+				shares->path [sizeof (shares->path) - 1] = '\0';
 
-				(void) strlcpy(shares->comment, comment,
+				strncpy(shares->comment, comment,
 				    sizeof (shares->comment));
+				shares->comment[sizeof (shares->comment)-1] =
+				    '\0';
 
 				shares->guest_ok = atoi(guest_ok);
 
 				shares->next = new_shares;
 				new_shares = shares;
 
-				free(path);
-				free(comment);
-				free(guest_ok);
-
+				name = NULL;
 				path = NULL;
 				comment = NULL;
 				guest_ok = NULL;
@@ -185,20 +179,13 @@ smb_retrieve_shares(void)
 		}
 
 out:
-		if (share_file_fp != NULL) {
+		if (share_file_fp != NULL)
 			fclose(share_file_fp);
-			share_file_fp = NULL;
-		}
 
 		free(name);
 		free(path);
 		free(comment);
 		free(guest_ok);
-
-		name = NULL;
-		path = NULL;
-		comment = NULL;
-		guest_ok = NULL;
 	}
 	closedir(shares_dir);
 
@@ -354,19 +341,17 @@ smb_validate_shareopts(const char *shareopts)
 static boolean_t
 smb_is_share_active(sa_share_impl_t impl_share)
 {
-	smb_share_t *iter = smb_shares;
-
 	if (!smb_available())
 		return (B_FALSE);
 
 	/* Retrieve the list of (possible) active shares */
 	smb_retrieve_shares();
 
-	while (iter != NULL) {
-		if (strcmp(impl_share->sharepath, iter->path) == 0)
+	while (smb_shares != NULL) {
+		if (strcmp(impl_share->sharepath, smb_shares->path) == 0)
 			return (B_TRUE);
 
-		iter = iter->next;
+		smb_shares = smb_shares->next;
 	}
 
 	return (B_FALSE);
@@ -395,7 +380,7 @@ smb_update_shareopts(sa_share_impl_t impl_share, const char *resource,
 	old_shareopts = FSINFO(impl_share, smb_fstype)->shareopts;
 
 	if (FSINFO(impl_share, smb_fstype)->active && old_shareopts != NULL &&
-	    strcmp(old_shareopts, shareopts) != 0) {
+		strcmp(old_shareopts, shareopts) != 0) {
 		needs_reshare = B_TRUE;
 		smb_disable_share(impl_share);
 	}

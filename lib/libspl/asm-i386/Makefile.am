@@ -1,1 +1,1 @@
-noinst_HEADERS = atomic.S
+noinst_HEADERS = $(top_srcdir)/lib/libspl/asm-i386/*.S

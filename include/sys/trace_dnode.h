@@ -24,9 +24,6 @@
 #undef TRACE_SYSTEM
 #define	TRACE_SYSTEM zfs
 
-#undef TRACE_SYSTEM_VAR
-#define	TRACE_SYSTEM_VAR zfs_dnode
-
 #if !defined(_TRACE_DNODE_H) || defined(TRACE_HEADER_MULTI_READ)
 #define	_TRACE_DNODE_H
 
@@ -41,7 +38,7 @@
  *     int64_t, ...,
  *     uint32_t, ...);
  */
-/* BEGIN CSTYLED */
+
 DECLARE_EVENT_CLASS(zfs_dnode_move_class,
 	TP_PROTO(dnode_t *dn, int64_t refcount, uint32_t dbufs),
 	TP_ARGS(dn, refcount, dbufs),
@@ -102,14 +99,11 @@ DECLARE_EVENT_CLASS(zfs_dnode_move_class,
 	    __entry->dn_maxblkid, __entry->dn_tx_holds, __entry->dn_holds,
 	    __entry->dn_have_spill, __entry->refcount, __entry->dbufs)
 );
-/* END CSTYLED */
 
-/* BEGIN CSTYLED */
 #define	DEFINE_DNODE_MOVE_EVENT(name) \
 DEFINE_EVENT(zfs_dnode_move_class, name, \
 	TP_PROTO(dnode_t *dn, int64_t refcount, uint32_t dbufs), \
 	TP_ARGS(dn, refcount, dbufs))
-/* END CSTYLED */
 DEFINE_DNODE_MOVE_EVENT(zfs_dnode__move);
 
 #endif /* _TRACE_DNODE_H */

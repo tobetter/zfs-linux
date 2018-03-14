@@ -92,7 +92,7 @@ static int
 zfs_callback(zfs_handle_t *zhp, void *data)
 {
 	callback_data_t *cb = data;
-	boolean_t should_close = B_TRUE;
+	boolean_t dontclose = B_FALSE;
 	boolean_t include_snaps = zfs_include_snapshots(zhp, cb);
 	boolean_t include_bmarks = (cb->cb_types & ZFS_TYPE_BOOKMARK);
 
@@ -120,7 +120,7 @@ zfs_callback(zfs_handle_t *zhp, void *data)
 				}
 			}
 			uu_avl_insert(cb->cb_avl, node, idx);
-			should_close = B_FALSE;
+			dontclose = B_TRUE;
 		} else {
 			free(node);
 		}
@@ -146,7 +146,7 @@ zfs_callback(zfs_handle_t *zhp, void *data)
 		cb->cb_depth--;
 	}
 
-	if (should_close)
+	if (!dontclose)
 		zfs_close(zhp);
 
 	return (0);
@@ -444,13 +444,13 @@ zfs_for_each(int argc, char **argv, int flags, zfs_type_t types,
 
 		/*
 		 * If we're recursive, then we always allow filesystems as
-		 * arguments.  If we also are interested in snapshots or
-		 * bookmarks, then we can take volumes as well.
+		 * arguments.  If we also are interested in snapshots, then we
+		 * can take volumes as well.
 		 */
 		argtype = types;
 		if (flags & ZFS_ITER_RECURSE) {
 			argtype |= ZFS_TYPE_FILESYSTEM;
-			if (types & (ZFS_TYPE_SNAPSHOT | ZFS_TYPE_BOOKMARK))
+			if (types & ZFS_TYPE_SNAPSHOT)
 				argtype |= ZFS_TYPE_VOLUME;
 		}
 

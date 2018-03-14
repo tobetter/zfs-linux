@@ -73,12 +73,8 @@ COLOR=1
 REPO="https://github.com/zfsonlinux"
 IMAGES_DIR="$SCRIPTDIR/zfs-images/"
 IMAGES_TAR="https://github.com/zfsonlinux/zfs-images/tarball/master"
+CPUS=`grep -c ^processor /proc/cpuinfo`
 ERROR=0
-
-CONFIG_LOG="configure.log"
-CONFIG_OPTIONS=${CONFIG_OPTIONS:-""}
-MAKE_LOG="make.log"
-MAKE_OPTIONS=${MAKE_OPTIONS:-"-s -j$(nproc)"}
 
 usage() {
 cat << EOF
@@ -273,7 +269,7 @@ if [ ! -d $IMAGES_DIR ]; then
 fi
 
 # Given the available images in the zfs-images directory substitute the
-# list of available images for the reserved keyword 'all'.
+# list of available images for the reserved keywork 'all'.
 for TAG in $POOL_TAGS; do
 
 	if  [ "$TAG" = "all" ]; then
@@ -409,9 +405,9 @@ for TAG in $SRC_TAGS; do
 	else
 		cd $SPL_DIR
 		make distclean &>/dev/null
-		./autogen.sh >>$CONFIG_LOG 2>&1 || fail 1
-		./configure $CONFIG_OPTIONS >>$CONFIG_LOG 2>&1 || fail 2
-		make ${MAKE_OPTIONS} >>$MAKE_LOG 2>&1 || fail 3
+		sh ./autogen.sh &>/dev/null || fail 1
+		./configure &>/dev/null || fail 2
+		make -s -j$CPUS &>/dev/null || fail 3
 		pass_nonewline
 	fi
 done
@@ -429,10 +425,9 @@ for TAG in $SRC_TAGS; do
 	else
 		cd $ZFS_DIR
 		make distclean &>/dev/null
-		./autogen.sh >>$CONFIG_LOG 2>&1 || fail 1
-		./configure --with-spl=$SPL_DIR $CONFIG_OPTIONS \
-                    >>$CONFIG_LOG 2>&1 || fail 2
-		make ${MAKE_OPTIONS} >>$MAKE_LOG 2>&1 || fail 3
+		sh ./autogen.sh &>/dev/null || fail 1
+		./configure --with-spl=$SPL_DIR &>/dev/null || fail 2
+		make -s -j$CPUS &>/dev/null || fail 3
 		pass_nonewline
 	fi
 done

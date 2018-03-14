@@ -27,7 +27,6 @@
 
 
 #include <rpc/types.h>
-#include <sys/kmem.h>
 #include <sys/nvpair.h>
 
 static void *

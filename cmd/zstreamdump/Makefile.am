@@ -7,7 +7,7 @@ DEFAULT_INCLUDES += \
 sbin_PROGRAMS = zstreamdump
 
 zstreamdump_SOURCES = \
-	zstreamdump.c
+	$(top_srcdir)/cmd/zstreamdump/zstreamdump.c
 
 zstreamdump_LDADD = \
 	$(top_builddir)/lib/libnvpair/libnvpair.la \
@@ -15,3 +15,5 @@ zstreamdump_LDADD = \
 	$(top_builddir)/lib/libzpool/libzpool.la \
 	$(top_builddir)/lib/libzfs/libzfs.la \
 	$(top_builddir)/lib/libzfs_core/libzfs_core.la
+
+zstreamdump_LDADD += $(ZLIB)

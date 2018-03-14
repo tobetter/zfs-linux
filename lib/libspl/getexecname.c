@@ -38,7 +38,7 @@ getexecname(void)
 	char *ptr = NULL;
 	ssize_t rc;
 
-	(void) pthread_mutex_lock(&mtx);
+	pthread_mutex_lock(&mtx);
 
 	if (strlen(execname) == 0) {
 		rc = readlink("/proc/self/exe",
@@ -53,6 +53,6 @@ getexecname(void)
 		ptr = execname;
 	}
 
-	(void) pthread_mutex_unlock(&mtx);
+	pthread_mutex_unlock(&mtx);
 	return (ptr);
 }

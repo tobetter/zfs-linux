@@ -1,7 +1,5 @@
 include $(top_srcdir)/config/Rules.am
 
-AM_CPPFLAGS += -DDEBUG
-
 DEFAULT_INCLUDES += \
 	-I$(top_srcdir)/include \
 	-I$(top_srcdir)/lib/libspl/include
@@ -9,8 +7,8 @@ DEFAULT_INCLUDES += \
 sbin_PROGRAMS = zdb
 
 zdb_SOURCES = \
-	zdb.c \
-	zdb_il.c
+	$(top_srcdir)/cmd/zdb/zdb.c \
+	$(top_srcdir)/cmd/zdb/zdb_il.c
 
 zdb_LDADD = \
 	$(top_builddir)/lib/libnvpair/libnvpair.la \
@@ -18,3 +16,5 @@ zdb_LDADD = \
 	$(top_builddir)/lib/libzpool/libzpool.la \
 	$(top_builddir)/lib/libzfs/libzfs.la \
 	$(top_builddir)/lib/libzfs_core/libzfs_core.la
+
+zdb_LDADD += $(ZLIB)
