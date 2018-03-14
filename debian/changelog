@@ -1,5 +1,0 @@
-zfs-linux (0.6.5.5-1) unstable; urgency=medium
-
-  * Initial Release (Closes: #686447)
-
- -- Aron Xu <aron@debian.org>  Sun, 20 Mar 2016 22:57:06 +0800
