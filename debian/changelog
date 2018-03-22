@@ -1,3 +1,11 @@
+zfs-linux (0.7.5-1ubuntu8) bionic; urgency=medium
+
+  * Add ZFS 0.6.x kernel ioctl binary compat shim (LP: #1751796)
+    Detect ZFS kernel driver version and copy zfs ioctl command to the
+    newer ZFS 0.7.0 ioctl command layout.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 22 Mar 2018 12:00:32 +0000
+
 zfs-linux (0.7.5-1ubuntu7) bionic; urgency=medium
 
   * Move zfs-modules | zfs-dkms to Suggests for zfsutils-linux (LP: #1756116)
