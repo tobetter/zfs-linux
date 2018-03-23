@@ -1,3 +1,12 @@
+zfs-linux (0.7.5-1ubuntu9) bionic; urgency=medium
+
+  * Move zfs-modules | zfs-dkms to Suggests for zfsutils-linux (LP: #1756116)
+    - redo this again, I should have modified ./debian/control.in,
+      modules are built-in, so we can make zfs-modules | zfs-dkms as
+      a Suggests for zfsutils-linux
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 23 Mar 2018 14:28:11 +0000
+
 zfs-linux (0.7.5-1ubuntu8) bionic; urgency=medium
 
   * Add ZFS 0.6.x kernel ioctl binary compat shim (LP: #1751796)
