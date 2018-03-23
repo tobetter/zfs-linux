@@ -128,9 +128,9 @@ Package: zfsutils-linux
 Section: contrib/admin
 Architecture: linux-any
 Depends: ${misc:Depends}, ${shlibs:Depends}, ${python3:Depends}, python3
-Recommends: lsb-base, zfs-modules | zfs-dkms, zfs-zed
+Recommends: lsb-base, zfs-zed
 Breaks: zfs-dkms (>> ${binary:Version}), zfs-dkms (<< ${binary:Version})
-Suggests: nfs-kernel-server, samba-common-bin (>= 3.0.23), zfs-initramfs | zfs-dracut
+Suggests: nfs-kernel-server, samba-common-bin (>= 3.0.23), zfs-initramfs | zfs-dracut, zfs-modules | zfs-dkms
 Conflicts: zfs, zfs-fuse, zutils
 Provides: zfsutils
 Description: command-line tools to manage OpenZFS filesystems
