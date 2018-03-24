@@ -144,7 +144,8 @@ Description: command-line tools to manage OpenZFS filesystems
 Package: zfs-zed
 Section: contrib/admin
 Architecture: linux-any
-Depends: ${misc:Depends}, ${shlibs:Depends}, zfs-modules | zfs-dkms, zfsutils-linux (>= ${binary:Version})
+Depends: ${misc:Depends}, ${shlibs:Depends}, zfsutils-linux (>= ${binary:Version})
+Suggests: zfs-modules | zfs-dkms
 Description: OpenZFS Event Daemon
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data
