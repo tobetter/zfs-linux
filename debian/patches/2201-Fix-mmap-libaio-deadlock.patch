@@ -1,0 +1,475 @@
+From 16df38490a0b9c32a55ae3b042fb27354d51d113 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Fri, 23 Mar 2018 13:47:25 -0700
+Subject: [PATCH] Fix mmap / libaio deadlock
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Calling uiomove() in mappedread() can result in deadlock if the
+user space page needs to be faulted in.
+
+This issue is that uiomove() must be called with the page lock held
+in order to safely populate the page date.  If the page needs to be
+faulted in by filemap_page_mkwrite() then it will also take the page
+lock resulting in a double-lock.
+
+Normally this isn't an issue since the pages are very likely to be
+already faulted in.  This patch makes sure that is always the case
+by prefaulting in the user space pages.
+
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Issue #7335
+(backported from 16df38490a0b9c32a55ae3b042fb27354d51d113)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+
+Index: zfs-linux-0.7.5/config/user-libaio.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/config/user-libaio.m4
+@@ -0,0 +1,14 @@
++dnl #
++dnl # Check for libaio - only used for libaiot test cases.
++dnl #
++AC_DEFUN([ZFS_AC_CONFIG_USER_LIBAIO], [
++	LIBAIO=
++
++	AC_CHECK_HEADER([libaio.h], [
++	    user_libaio=yes
++	    AC_SUBST([LIBAIO], ["-laio"])
++	    AC_DEFINE([HAVE_LIBAIO], 1, [Define if you have libaio])
++	], [
++	    user_libaio=no
++	])
++])
+Index: zfs-linux-0.7.5/config/user.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/user.m4
++++ zfs-linux-0.7.5/config/user.m4
+@@ -13,6 +13,7 @@ AC_DEFUN([ZFS_AC_CONFIG_USER], [
+ 	ZFS_AC_CONFIG_USER_LIBTIRPC
+ 	ZFS_AC_CONFIG_USER_LIBBLKID
+ 	ZFS_AC_CONFIG_USER_LIBATTR
++	ZFS_AC_CONFIG_USER_LIBAIO
+ 	ZFS_AC_CONFIG_USER_LIBUDEV
+ 	ZFS_AC_CONFIG_USER_FRAME_LARGER_THAN
+ 	ZFS_AC_CONFIG_USER_RUNSTATEDIR
+Index: zfs-linux-0.7.5/config/zfs-build.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/zfs-build.m4
++++ zfs-linux-0.7.5/config/zfs-build.m4
+@@ -79,11 +79,11 @@ AC_DEFUN([ZFS_AC_CONFIG], [
+ 	AM_CONDITIONAL([CONFIG_KERNEL],
+ 	    [test "$ZFS_CONFIG" = kernel -o "$ZFS_CONFIG" = all] &&
+ 	    [test "x$enable_linux_builtin" != xyes ])
+-	AM_CONDITIONAL([WANT_DEVNAME2DEVID],
+-	    [test "x$user_libudev" = xyes ])
+ 	AM_CONDITIONAL([CONFIG_QAT],
+ 	    [test "$ZFS_CONFIG" = kernel -o "$ZFS_CONFIG" = all] &&
+ 	    [test "x$qatsrc" != x ])
++	AM_CONDITIONAL([WANT_DEVNAME2DEVID], [test "x$user_libudev" = xyes ])
++	AM_CONDITIONAL([WANT_MMAP_LIBAIO], [test "x$user_libaio" = xyes ])
+ ])
+ 
+ dnl #
+Index: zfs-linux-0.7.5/configure.ac
+===================================================================
+--- zfs-linux-0.7.5.orig/configure.ac
++++ zfs-linux-0.7.5/configure.ac
+@@ -163,6 +163,7 @@ AC_CONFIG_FILES([
+ 	tests/zfs-tests/cmd/mkfiles/Makefile
+ 	tests/zfs-tests/cmd/mktree/Makefile
+ 	tests/zfs-tests/cmd/mmap_exec/Makefile
++	tests/zfs-tests/cmd/mmap_libaio/Makefile
+ 	tests/zfs-tests/cmd/mmapwrite/Makefile
+ 	tests/zfs-tests/cmd/randfree_file/Makefile
+ 	tests/zfs-tests/cmd/readmmap/Makefile
+Index: zfs-linux-0.7.5/include/sys/uio_impl.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/sys/uio_impl.h
++++ zfs-linux-0.7.5/include/sys/uio_impl.h
+@@ -42,7 +42,7 @@
+ #include <sys/uio.h>
+ 
+ extern int uiomove(void *, size_t, enum uio_rw, uio_t *);
+-extern void uio_prefaultpages(ssize_t, uio_t *);
++extern int uio_prefaultpages(ssize_t, enum uio_rw, uio_t *);
+ extern int uiocopy(void *, size_t, enum uio_rw, uio_t *, size_t *);
+ extern void uioskip(uio_t *, size_t);
+ 
+Index: zfs-linux-0.7.5/module/zcommon/zfs_uio.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zcommon/zfs_uio.c
++++ zfs-linux-0.7.5/module/zcommon/zfs_uio.c
+@@ -148,64 +148,51 @@ uiomove(void *p, size_t n, enum uio_rw r
+ }
+ EXPORT_SYMBOL(uiomove);
+ 
+-#define	fuword8(uptr, vptr)	get_user((*vptr), (uptr))
+-
+ /*
+- * Fault in the pages of the first n bytes specified by the uio structure.
+- * 1 byte in each page is touched and the uio struct is unmodified. Any
+- * error will terminate the process as this is only a best attempt to get
+- * the pages resident.
++ * Fault in the user space pages specified by the uio structure.  Note that
++ * when faulting in pages with UIO_READ they may have zeros written to them
++ * which is OK because we know they'll be overwritten.
+  */
+-void
+-uio_prefaultpages(ssize_t n, struct uio *uio)
++int
++uio_prefaultpages(ssize_t n, enum uio_rw rw, struct uio *uio)
+ {
+-	const struct iovec *iov;
+-	ulong_t cnt, incr;
+-	caddr_t p;
+-	uint8_t tmp;
+-	int iovcnt;
+-	size_t skip;
+-
+-	/* no need to fault in kernel pages */
+-	switch (uio->uio_segflg) {
+-		case UIO_SYSSPACE:
+-		case UIO_BVEC:
+-			return;
+-		case UIO_USERSPACE:
+-		case UIO_USERISPACE:
+-			break;
+-		default:
+-			ASSERT(0);
+-	}
++	const struct iovec *iov = uio->uio_iov;
++	size_t skip = uio->uio_skip;
++	int iovcnt = uio->uio_iovcnt;
++	uio_seg_t seg = uio->uio_segflg;
++	char __user *p;
++	ulong_t cnt;
++	int error;
++
++	/* No need to fault in kernel pages */
++	if (seg == UIO_SYSSPACE || seg == UIO_BVEC)
++		return (0);
+ 
+-	iov = uio->uio_iov;
+-	iovcnt = uio->uio_iovcnt;
+-	skip = uio->uio_skip;
++	ASSERT(seg == UIO_USERSPACE || seg == UIO_USERISPACE);
+ 
+-	for (; n > 0 && iovcnt > 0; iov++, iovcnt--, skip = 0) {
++	while ((n > 0) && (iovcnt > 0)) {
+ 		cnt = MIN(iov->iov_len - skip, n);
+-		/* empty iov */
+-		if (cnt == 0)
+-			continue;
+-		n -= cnt;
+-		/*
+-		 * touch each page in this segment.
+-		 */
+ 		p = iov->iov_base + skip;
+-		while (cnt) {
+-			if (fuword8((uint8_t *)p, &tmp))
+-				return;
+-			incr = MIN(cnt, PAGESIZE);
+-			p += incr;
+-			cnt -= incr;
++
++		if (rw == UIO_READ)
++			error = -fault_in_pages_writeable(p, cnt);
++		else
++			error = -fault_in_pages_readable(p, cnt);
++
++		if (error)
++			return (error);
++
++		skip += cnt;
++		if (skip == iov->iov_len) {
++			skip = 0;
++			iov++;
++			iovcnt--;
+ 		}
+-		/*
+-		 * touch the last byte in case it straddles a page.
+-		 */
+-		p--;
+-		if (fuword8((uint8_t *)p, &tmp))
+-			return;
++
++		n -= cnt;
+ 	}
++
++	return (0);
+ }
+ EXPORT_SYMBOL(uio_prefaultpages);
+ 
+Index: zfs-linux-0.7.5/module/zfs/zfs_vnops.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/zfs_vnops.c
++++ zfs-linux-0.7.5/module/zfs/zfs_vnops.c
+@@ -390,6 +390,10 @@ mappedread(struct inode *ip, int nbytes,
+ 	int error = 0;
+ 	void *pb;
+ 
++	error = uio_prefaultpages(nbytes, UIO_READ, uio);
++	if (error)
++		return (error);
++
+ 	start = uio->uio_loffset;
+ 	off = start & (PAGE_SIZE-1);
+ 	for (start &= PAGE_MASK; len > 0; start += PAGE_SIZE) {
+@@ -675,7 +679,7 @@ zfs_write(struct inode *ip, uio_t *uio,
+ 		xuio = (xuio_t *)uio;
+ 	else
+ #endif
+-		uio_prefaultpages(MIN(n, max_blksz), uio);
++		uio_prefaultpages(MIN(n, max_blksz), UIO_WRITE, uio);
+ 
+ 	/*
+ 	 * If in append mode, set the io offset pointer to eof.
+@@ -921,7 +925,7 @@ zfs_write(struct inode *ip, uio_t *uio,
+ 		n -= nbytes;
+ 
+ 		if (!xuio && n > 0)
+-			uio_prefaultpages(MIN(n, max_blksz), uio);
++			uio_prefaultpages(MIN(n, max_blksz), UIO_WRITE, uio);
+ 	}
+ 
+ 	zfs_inode_update(zp);
+Index: zfs-linux-0.7.5/rpm/generic/zfs.spec.in
+===================================================================
+--- zfs-linux-0.7.5.orig/rpm/generic/zfs.spec.in
++++ zfs-linux-0.7.5/rpm/generic/zfs.spec.in
+@@ -182,6 +182,7 @@ Requires:       fio
+ Requires:       acl
+ Requires:       sudo
+ Requires:       sysstat
++Requires:	libaio
+ Requires:       rng-tools
+ AutoReqProv:    no
+ 
+Index: zfs-linux-0.7.5/tests/runfiles/linux.run
+===================================================================
+--- zfs-linux-0.7.5.orig/tests/runfiles/linux.run
++++ zfs-linux-0.7.5/tests/runfiles/linux.run
+@@ -485,7 +485,7 @@ tests = ['migration_001_pos', 'migration
+ tags = ['functional', 'migration']
+ 
+ [tests/functional/mmap]
+-tests = ['mmap_write_001_pos', 'mmap_read_001_pos']
++tests = ['mmap_write_001_pos', 'mmap_read_001_pos', 'mmap_libaio_001_pos']
+ tags = ['functional', 'mmap']
+ 
+ [tests/functional/mmp]
+Index: zfs-linux-0.7.5/tests/zfs-tests/cmd/Makefile.am
+===================================================================
+--- zfs-linux-0.7.5.orig/tests/zfs-tests/cmd/Makefile.am
++++ zfs-linux-0.7.5/tests/zfs-tests/cmd/Makefile.am
+@@ -14,6 +14,7 @@ SUBDIRS = \
+ 	mkfiles \
+ 	mktree \
+ 	mmap_exec \
++	mmap_libaio \
+ 	mmapwrite \
+ 	randfree_file \
+ 	readmmap \
+Index: zfs-linux-0.7.5/tests/zfs-tests/cmd/mmap_libaio/.gitignore
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/tests/zfs-tests/cmd/mmap_libaio/.gitignore
+@@ -0,0 +1 @@
++/mmap_libaio
+Index: zfs-linux-0.7.5/tests/zfs-tests/cmd/mmap_libaio/Makefile.am
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/tests/zfs-tests/cmd/mmap_libaio/Makefile.am
+@@ -0,0 +1,9 @@
++include $(top_srcdir)/config/Rules.am
++
++pkgexecdir = $(datadir)/@PACKAGE@/zfs-tests/bin
++
++if WANT_MMAP_LIBAIO
++pkgexec_PROGRAMS = mmap_libaio
++mmap_libaio_SOURCES = mmap_libaio.c
++mmap_libaio_LDADD = $(LIBAIO)
++endif
+Index: zfs-linux-0.7.5/tests/zfs-tests/cmd/mmap_libaio/mmap_libaio.c
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/tests/zfs-tests/cmd/mmap_libaio/mmap_libaio.c
+@@ -0,0 +1,88 @@
++/*
++ * CDDL HEADER START
++ *
++ * The contents of this file are subject to the terms of the
++ * Common Development and Distribution License (the "License").
++ * You may not use this file except in compliance with the License.
++ *
++ * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
++ * or http://www.opensolaris.org/os/licensing.
++ * See the License for the specific language governing permissions
++ * and limitations under the License.
++ *
++ * When distributing Covered Code, include this CDDL HEADER in each
++ * file and include the License file at usr/src/OPENSOLARIS.LICENSE.
++ * If applicable, add the following below this CDDL HEADER, with the
++ * fields enclosed by brackets "[]" replaced with your own identifying
++ * information: Portions Copyright [yyyy] [name of copyright owner]
++ *
++ * CDDL HEADER END
++ */
++
++/*
++ * Copyright 2018 Canonical.  All rights reserved.
++ */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <sys/mman.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <libaio.h>
++#include <err.h>
++
++io_context_t io_ctx;
++
++static void
++do_sync_io(struct iocb *iocb)
++{
++	struct io_event event;
++	struct iocb *iocbs[] = { iocb };
++	struct timespec ts = { 30, 0 };
++
++	if (io_submit(io_ctx, 1, iocbs) != 1)
++		err(1, "io_submit failed");
++
++	if (io_getevents(io_ctx, 0, 1, &event, &ts) != 1)
++		err(1, "io_getevents failed");
++}
++
++int
++main(int argc, char **argv)
++{
++	char *buf;
++	int page_size = getpagesize();
++	int buf_size = strtol(argv[2], NULL, 0);
++	int rwfd;
++	struct iocb iocb;
++
++	if (io_queue_init(1024, &io_ctx))
++		err(1, "io_queue_init failed");
++
++	rwfd = open(argv[1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
++	if (rwfd < 0)
++		err(1, "open failed");
++
++	if (ftruncate(rwfd, buf_size) < 0)
++		err(1, "ftruncate failed");
++
++	buf = mmap(0, page_size, PROT_READ | PROT_WRITE, MAP_SHARED, rwfd, 0);
++	if (buf == MAP_FAILED)
++		err(1, "mmap failed");
++
++	(void) io_prep_pwrite(&iocb, rwfd, buf, buf_size, 0);
++	do_sync_io(&iocb);
++
++	(void) io_prep_pread(&iocb, rwfd, buf, buf_size, 0);
++	do_sync_io(&iocb);
++
++	if (close(rwfd))
++		err(1, "close failed");
++
++	if (io_queue_release(io_ctx) != 0)
++		err(1, "io_queue_release failed");
++
++	return (0);
++}
+Index: zfs-linux-0.7.5/tests/zfs-tests/include/commands.cfg
+===================================================================
+--- zfs-linux-0.7.5.orig/tests/zfs-tests/include/commands.cfg
++++ zfs-linux-0.7.5/tests/zfs-tests/include/commands.cfg
+@@ -157,6 +157,7 @@ export ZFSTEST_FILES='chg_usr_exec
+     mkfiles
+     mktree
+     mmap_exec
++    mmap_libaio
+     mmapwrite
+     randfree_file
+     readmmap
+Index: zfs-linux-0.7.5/tests/zfs-tests/tests/functional/mmap/Makefile.am
+===================================================================
+--- zfs-linux-0.7.5.orig/tests/zfs-tests/tests/functional/mmap/Makefile.am
++++ zfs-linux-0.7.5/tests/zfs-tests/tests/functional/mmap/Makefile.am
+@@ -4,4 +4,5 @@ dist_pkgdata_SCRIPTS = \
+ 	cleanup.ksh \
+ 	mmap.cfg \
+ 	mmap_read_001_pos.ksh \
+-	mmap_write_001_pos.ksh
++	mmap_write_001_pos.ksh \
++	mmap_libaio_001_pos.ksh
+Index: zfs-linux-0.7.5/tests/zfs-tests/tests/functional/mmap/mmap_libaio_001_pos.ksh
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/tests/zfs-tests/tests/functional/mmap/mmap_libaio_001_pos.ksh
+@@ -0,0 +1,61 @@
++#!/bin/ksh -p
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2018 Canonical.  All rights reserved.
++#
++
++. $STF_SUITE/include/libtest.shlib
++. $STF_SUITE/tests/functional/mmap/mmap.cfg
++
++#
++# DESCRIPTION:
++# Verify libaio functions correctly with mmap()'d files.
++#
++# STRATEGY:
++# 1. Call mmap_libaio binary
++# 2. Verify the file exists and is the expected size
++# 3. Verify the filesystem is intact and not hung in any way
++#
++
++verify_runnable "global"
++
++log_assert "verify mmap'd pages work with libaio"
++
++# mmap_libaio is built when the libaio-devel package is installed.
++if ! which mmap_libaio; then
++	log_unsupported "This test requires mmap_libaio."
++fi
++
++log_must chmod 777 $TESTDIR
++
++for size in 512 4096 8192; do
++	log_mustnot stat $TESTDIR/test-libaio-file
++	log_must mmap_libaio $TESTDIR/test-libaio-file $size
++	log_must verify_eq $(stat --format=%s $TESTDIR/test-libaio-file) $size
++	log_must rm $TESTDIR/test-libaio-file
++done
++
++typeset dir=$(get_device_dir $DISKS)
++verify_filesys "$TESTPOOL" "$TESTPOOL/$TESTFS" "$dir"
++
++log_pass "mmap'd pages work with libaio"

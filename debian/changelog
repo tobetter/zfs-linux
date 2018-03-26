@@ -1,3 +1,10 @@
+zfs-linux (0.7.5-1ubuntu11) bionic; urgency=medium
+
+  * Fix mmap'd libaio read on non-prefaulted page deadlock (LP: #1754584)
+    - ensure page is pre-faulted in to avoid deadlock
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 26 Mar 2018 09:29:23 +0100
+
 zfs-linux (0.7.5-1ubuntu10) bionic; urgency=medium
 
   * debian/control.in: Make zfs-modules | zfs-dkms Suggests for zfs-zed too.
