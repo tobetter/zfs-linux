@@ -1,0 +1,274 @@
+From e2652650726802c8b3066d0aa22651658448a8e3 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Mon, 26 Mar 2018 17:44:19 -0700
+Subject: [PATCH] Fix mmap / libaio deadlock
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Calling uiomove() in mappedread() can result in deadlock if the
+user space page needs to be faulted in.
+
+Resolve the issue by only taking a reference on the page when
+copying it and not the page lock.  The inode range lock protects
+against concurrent updates via zfs_read() and zfs_write().
+
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Issue #7335
+(backported from upstream, early hotfix, not commit sha)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+
+Index: zfs-linux-0.6.5.11/config/user-libaio.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.11/config/user-libaio.m4
+@@ -0,0 +1,14 @@
++dnl #
++dnl # Check for libaio - only used for libaiot test cases.
++dnl #
++AC_DEFUN([ZFS_AC_CONFIG_USER_LIBAIO], [
++	LIBAIO=
++
++	AC_CHECK_HEADER([libaio.h], [
++	    user_libaio=yes
++	    AC_SUBST([LIBAIO], ["-laio"])
++	    AC_DEFINE([HAVE_LIBAIO], 1, [Define if you have libaio])
++	], [
++	    user_libaio=no
++	])
++])
+Index: zfs-linux-0.6.5.11/config/user.m4
+===================================================================
+--- zfs-linux-0.6.5.11.orig/config/user.m4
++++ zfs-linux-0.6.5.11/config/user.m4
+@@ -5,6 +5,7 @@ AC_DEFUN([ZFS_AC_CONFIG_USER], [
+ 	ZFS_AC_DKMS_INHIBIT
+ 	ZFS_AC_CONFIG_USER_MOUNT_HELPER
+ 	ZFS_AC_CONFIG_USER_UDEV
++	ZFS_AC_CONFIG_USER_LIBAIO
+ 	ZFS_AC_CONFIG_USER_SYSTEMD
+ 	ZFS_AC_CONFIG_USER_SYSVINIT
+ 	ZFS_AC_CONFIG_USER_DRACUT
+Index: zfs-linux-0.6.5.11/config/zfs-build.m4
+===================================================================
+--- zfs-linux-0.6.5.11.orig/config/zfs-build.m4
++++ zfs-linux-0.6.5.11/config/zfs-build.m4
+@@ -103,6 +103,8 @@ AC_DEFUN([ZFS_AC_CONFIG], [
+ 	AM_CONDITIONAL([CONFIG_KERNEL],
+ 		       [test "$ZFS_CONFIG" = kernel -o "$ZFS_CONFIG" = all] &&
+ 		       [test "x$enable_linux_builtin" != xyes ])
++	AM_CONDITIONAL([WANT_DEVNAME2DEVID], [test "x$user_libudev" = xyes ])
++	AM_CONDITIONAL([WANT_MMAP_LIBAIO], [test "x$user_libaio" = xyes ])
+ ])
+ 
+ dnl #
+Index: zfs-linux-0.6.5.11/module/zfs/zfs_vnops.c
+===================================================================
+--- zfs-linux-0.6.5.11.orig/module/zfs/zfs_vnops.c
++++ zfs-linux-0.6.5.11/module/zfs/zfs_vnops.c
+@@ -391,6 +391,7 @@ mappedread(struct inode *ip, int nbytes,
+ 		pp = find_lock_page(mp, start >> PAGE_SHIFT);
+ 		if (pp) {
+ 			ASSERT(PageUptodate(pp));
++			unlock_page(pp);
+ 
+ 			pb = kmap(pp);
+ 			error = uiomove(pb + off, bytes, UIO_READ, uio);
+@@ -400,7 +401,6 @@ mappedread(struct inode *ip, int nbytes,
+ 				flush_dcache_page(pp);
+ 
+ 			mark_page_accessed(pp);
+-			unlock_page(pp);
+ 			put_page(pp);
+ 		} else {
+ 			error = dmu_read_uio_dbuf(sa_get_db(zp->z_sa_hdl),
+Index: zfs-linux-0.6.5.11/rpm/generic/zfs.spec.in
+===================================================================
+--- zfs-linux-0.6.5.11.orig/rpm/generic/zfs.spec.in
++++ zfs-linux-0.6.5.11/rpm/generic/zfs.spec.in
+@@ -175,6 +175,7 @@ Requires:       parted
+ Requires:       lsscsi
+ Requires:       mdadm
+ Requires:       bc
++Requires:	libaio
+ 
+ %description test
+ This package contains test infrastructure and support scripts for
+Index: zfs-linux-0.6.5.11/tests/zfs-tests/cmd/mmap_libaio/.gitignore
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.11/tests/zfs-tests/cmd/mmap_libaio/.gitignore
+@@ -0,0 +1 @@
++/mmap_libaio
+Index: zfs-linux-0.6.5.11/tests/zfs-tests/cmd/mmap_libaio/Makefile.am
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.11/tests/zfs-tests/cmd/mmap_libaio/Makefile.am
+@@ -0,0 +1,9 @@
++include $(top_srcdir)/config/Rules.am
++
++pkgexecdir = $(datadir)/@PACKAGE@/zfs-tests/bin
++
++if WANT_MMAP_LIBAIO
++pkgexec_PROGRAMS = mmap_libaio
++mmap_libaio_SOURCES = mmap_libaio.c
++mmap_libaio_LDADD = $(LIBAIO)
++endif
+Index: zfs-linux-0.6.5.11/tests/zfs-tests/cmd/mmap_libaio/mmap_libaio.c
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.11/tests/zfs-tests/cmd/mmap_libaio/mmap_libaio.c
+@@ -0,0 +1,88 @@
++/*
++ * CDDL HEADER START
++ *
++ * The contents of this file are subject to the terms of the
++ * Common Development and Distribution License (the "License").
++ * You may not use this file except in compliance with the License.
++ *
++ * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
++ * or http://www.opensolaris.org/os/licensing.
++ * See the License for the specific language governing permissions
++ * and limitations under the License.
++ *
++ * When distributing Covered Code, include this CDDL HEADER in each
++ * file and include the License file at usr/src/OPENSOLARIS.LICENSE.
++ * If applicable, add the following below this CDDL HEADER, with the
++ * fields enclosed by brackets "[]" replaced with your own identifying
++ * information: Portions Copyright [yyyy] [name of copyright owner]
++ *
++ * CDDL HEADER END
++ */
++
++/*
++ * Copyright 2018 Canonical.  All rights reserved.
++ */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <sys/mman.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <libaio.h>
++#include <err.h>
++
++io_context_t io_ctx;
++
++static void
++do_sync_io(struct iocb *iocb)
++{
++	struct io_event event;
++	struct iocb *iocbs[] = { iocb };
++	struct timespec ts = { 30, 0 };
++
++	if (io_submit(io_ctx, 1, iocbs) != 1)
++		err(1, "io_submit failed");
++
++	if (io_getevents(io_ctx, 0, 1, &event, &ts) != 1)
++		err(1, "io_getevents failed");
++}
++
++int
++main(int argc, char **argv)
++{
++	char *buf;
++	int page_size = getpagesize();
++	int buf_size = strtol(argv[2], NULL, 0);
++	int rwfd;
++	struct iocb iocb;
++
++	if (io_queue_init(1024, &io_ctx))
++		err(1, "io_queue_init failed");
++
++	rwfd = open(argv[1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
++	if (rwfd < 0)
++		err(1, "open failed");
++
++	if (ftruncate(rwfd, buf_size) < 0)
++		err(1, "ftruncate failed");
++
++	buf = mmap(0, page_size, PROT_READ | PROT_WRITE, MAP_SHARED, rwfd, 0);
++	if (buf == MAP_FAILED)
++		err(1, "mmap failed");
++
++	(void) io_prep_pwrite(&iocb, rwfd, buf, buf_size, 0);
++	do_sync_io(&iocb);
++
++	(void) io_prep_pread(&iocb, rwfd, buf, buf_size, 0);
++	do_sync_io(&iocb);
++
++	if (close(rwfd))
++		err(1, "close failed");
++
++	if (io_queue_release(io_ctx) != 0)
++		err(1, "io_queue_release failed");
++
++	return (0);
++}
+Index: zfs-linux-0.6.5.11/tests/zfs-tests/tests/functional/mmap/mmap_libaio_001_pos.ksh
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.11/tests/zfs-tests/tests/functional/mmap/mmap_libaio_001_pos.ksh
+@@ -0,0 +1,61 @@
++#!/bin/ksh -p
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2018 Canonical.  All rights reserved.
++#
++
++. $STF_SUITE/include/libtest.shlib
++. $STF_SUITE/tests/functional/mmap/mmap.cfg
++
++#
++# DESCRIPTION:
++# Verify libaio functions correctly with mmap()'d files.
++#
++# STRATEGY:
++# 1. Call mmap_libaio binary
++# 2. Verify the file exists and is the expected size
++# 3. Verify the filesystem is intact and not hung in any way
++#
++
++verify_runnable "global"
++
++log_assert "verify mmap'd pages work with libaio"
++
++# mmap_libaio is built when the libaio-devel package is installed.
++if ! which mmap_libaio; then
++	log_unsupported "This test requires mmap_libaio."
++fi
++
++log_must chmod 777 $TESTDIR
++
++for size in 512 4096 8192; do
++	log_mustnot stat $TESTDIR/test-libaio-file
++	log_must mmap_libaio $TESTDIR/test-libaio-file $size
++	log_must verify_eq $(stat --format=%s $TESTDIR/test-libaio-file) $size
++	log_must rm $TESTDIR/test-libaio-file
++done
++
++typeset dir=$(get_device_dir $DISKS)
++verify_filesys "$TESTPOOL" "$TESTPOOL/$TESTFS" "$dir"
++
++log_pass "mmap'd pages work with libaio"
