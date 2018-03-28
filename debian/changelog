@@ -1,3 +1,14 @@
+zfs-linux (0.6.5.6-0ubuntu20) xenial; urgency=medium
+
+  * Fix mmap'd libaio read on non-prefaulted page deadlock (LP: #1754584)
+    - Revert previous fix as there still is a potential for deadlock
+      on the prefaulted page(s). Resolve the issue by only taking a
+      reference on the page when copying it and not the page lock.
+      The inode range lock protects against concurrent updates via
+      zfs_read() and zfs_write().
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 28 Mar 2018 14:35:11 +0100
+
 zfs-linux (0.6.5.6-0ubuntu19) xenial; urgency=medium
 
   * Add ZFS 0.7.0 kernel ioctl binary compat shim (LP: #1737761)
