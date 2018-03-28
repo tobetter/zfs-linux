@@ -1,3 +1,14 @@
+zfs-linux (0.7.5-1ubuntu12) bionic; urgency=medium
+
+  * Fix mmap'd libaio read on non-prefaulted page deadlock (LP: #1754584)
+    - Revert previous fix as there still is a potential for deadlock
+      on the prefaulted page(s). Resolve the issue by only taking a
+      reference on the page when copying it and not the page lock.
+      The inode range lock protects against concurrent updates via
+      zfs_read() and zfs_write().
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 28 Mar 2018 08:56:18 +0100
+
 zfs-linux (0.7.5-1ubuntu11) bionic; urgency=medium
 
   * Fix mmap'd libaio read on non-prefaulted page deadlock (LP: #1754584)
