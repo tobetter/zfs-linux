@@ -14,3 +14,4 @@ enable-zed.patch
 2102-Fix-ARC-hit-rate.patch
 2200-add-zfs-0.6.x-ioctl-compat-shim.patch
 2201-Fix-mmap-libaio-deadlock.patch
+2202-Allow-mounting-datasets-more-than-once.patch

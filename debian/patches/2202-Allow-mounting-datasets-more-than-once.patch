@@ -1,0 +1,377 @@
+From 1a5b486c105ff5ddc4bc7560bb303630cf2ce1bb Mon Sep 17 00:00:00 2001
+From: Seth Forshee <seth.forshee@canonical.com>
+Date: Tue, 20 Mar 2018 15:20:52 -0400
+Subject: [PATCH] Allow mounting datasets more than once
+
+Currently mounting an already mounted zfs dataset results in an
+error, whereas it is typically allowed with other filesystems.
+This causes some bad interactions with mount namespaces. Take
+this sequence for example:
+
+ - Create a dataset
+ - Create a snapshot of the dataset
+ - Create a clone of the snapshot
+ - Create a new mount namespace
+ - Rename the original dataset
+
+The rename results in unmounting and remounting the clone in the
+original mount namespace, however the remount fails because the
+dataset is still mounted in the new mount namespace. (Note that
+this means the mount in the new mount namespace is never being
+unmounted, so perhaps the unmount/remount of the clone isn't
+actually necessary.)
+
+The problem here is a result of the way mounting is implemented
+in the kernel module. Since it is not mounting block devices it
+uses mount_nodev() instead of the usual mount_bdev(). However,
+mount_nodev() is written for filesystems for which each mount is
+a new instance (i.e. a new super block), and zfs should be able
+to detect when a mount request can be satisfied using an existing
+super block.
+
+Change zpl_mount() to call sget() directly with it's own test
+callback. Passing the objset_t object as the fs data allows
+checking if a superblock already exists for the dataset, and in
+that case we just need to return a new reference for the sb's
+root dentry.
+
+Signed-off-by: Seth Forshee <seth.forshee@canonical.com>
+Closes #5796
+(minor backport wiggle required on tests/runfiles/linux.run)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+
+Index: zfs-linux-0.7.5/config/kernel-fst-mount.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/config/kernel-fst-mount.m4
+@@ -0,0 +1,28 @@
++dnl #
++dnl # 2.6.38 API change
++dnl # The .get_sb callback has been replaced by a .mount callback
++dnl # in the file_system_type structure.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_FST_MOUNT], [
++        AC_MSG_CHECKING([whether fst->mount() exists])
++        ZFS_LINUX_TRY_COMPILE([
++                #include <linux/fs.h>
++
++                static struct dentry *
++                mount(struct file_system_type *fs_type, int flags,
++                    const char *osname, void *data) {
++                        struct dentry *d = NULL;
++                        return (d);
++                }
++
++                static struct file_system_type fst __attribute__ ((unused)) = {
++                        .mount = mount,
++                };
++        ],[
++        ],[
++                AC_MSG_RESULT(yes)
++                AC_DEFINE(HAVE_FST_MOUNT, 1, [fst->mount() exists])
++        ],[
++                AC_MSG_RESULT(no)
++        ])
++])
+Index: zfs-linux-0.7.5/config/kernel-mount-nodev.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/kernel-mount-nodev.m4
++++ /dev/null
+@@ -1,20 +0,0 @@
+-dnl #
+-dnl # 2.6.39 API change
+-dnl # The .get_sb callback has been replaced by a .mount callback
+-dnl # in the file_system_type structure.  When using the new
+-dnl # interface the caller must now use the mount_nodev() helper.
+-dnl # This updated callback and helper no longer pass the vfsmount.
+-dnl #
+-AC_DEFUN([ZFS_AC_KERNEL_MOUNT_NODEV],
+-	[AC_MSG_CHECKING([whether mount_nodev() is available])
+-	ZFS_LINUX_TRY_COMPILE_SYMBOL([
+-		#include <linux/fs.h>
+-	], [
+-		mount_nodev(NULL, 0, NULL, NULL);
+-	], [mount_nodev], [fs/super.c], [
+-		AC_MSG_RESULT(yes)
+-		AC_DEFINE(HAVE_MOUNT_NODEV, 1, [mount_nodev() is available])
+-	], [
+-		AC_MSG_RESULT(no)
+-	])
+-])
+Index: zfs-linux-0.7.5/config/kernel.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/kernel.m4
++++ zfs-linux-0.7.5/config/kernel.m4
+@@ -98,7 +98,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_TRUNCATE_SETSIZE
+ 	ZFS_AC_KERNEL_6ARGS_SECURITY_INODE_INIT_SECURITY
+ 	ZFS_AC_KERNEL_CALLBACK_SECURITY_INODE_INIT_SECURITY
+-	ZFS_AC_KERNEL_MOUNT_NODEV
++	ZFS_AC_KERNEL_FST_MOUNT
+ 	ZFS_AC_KERNEL_SHRINK
+ 	ZFS_AC_KERNEL_SHRINK_CONTROL_HAS_NID
+ 	ZFS_AC_KERNEL_S_INSTANCES_LIST_HEAD
+Index: zfs-linux-0.7.5/include/linux/vfs_compat.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/linux/vfs_compat.h
++++ zfs-linux-0.7.5/include/linux/vfs_compat.h
+@@ -183,6 +183,30 @@ zpl_bdi_destroy(struct super_block *sb)
+ #endif
+ 
+ /*
++ * 4.14 adds SB_* flag definitions, define them to MS_* equivalents
++ * if not set.
++ */
++#ifndef	SB_RDONLY
++#define	SB_RDONLY	MS_RDONLY
++#endif
++
++#ifndef	SB_SILENT
++#define	SB_SILENT	MS_SILENT
++#endif
++
++#ifndef	SB_ACTIVE
++#define	SB_ACTIVE	MS_ACTIVE
++#endif
++
++#ifndef	SB_POSIXACL
++#define	SB_POSIXACL	MS_POSIXACL
++#endif
++
++#ifndef	SB_MANDLOCK
++#define	SB_MANDLOCK	MS_MANDLOCK
++#endif
++
++/*
+  * 2.6.38 API change,
+  * LOOKUP_RCU flag introduced to distinguish rcu-walk from ref-walk cases.
+  */
+Index: zfs-linux-0.7.5/module/zfs/zpl_super.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/zpl_super.c
++++ zfs-linux-0.7.5/module/zfs/zpl_super.c
+@@ -248,14 +248,61 @@ zpl_fill_super(struct super_block *sb, v
+ 	return (error);
+ }
+ 
+-#ifdef HAVE_MOUNT_NODEV
++static int
++zpl_test_super(struct super_block *s, void *data)
++{
++	zfsvfs_t *zfsvfs = s->s_fs_info;
++	objset_t *os = data;
++
++	if (zfsvfs == NULL)
++		return (0);
++
++	return (os == zfsvfs->z_os);
++}
++
++static struct super_block *
++zpl_mount_impl(struct file_system_type *fs_type, int flags, zfs_mnt_t *zm)
++{
++	struct super_block *s;
++	objset_t *os;
++	int err;
++
++	err = dmu_objset_hold(zm->mnt_osname, FTAG, &os);
++	if (err)
++		return (ERR_PTR(-err));
++
++	s = zpl_sget(fs_type, zpl_test_super, set_anon_super, flags, os);
++	dmu_objset_rele(os, FTAG);
++	if (IS_ERR(s))
++		return (ERR_CAST(s));
++
++	if (s->s_root == NULL) {
++		err = zpl_fill_super(s, zm, flags & SB_SILENT ? 1 : 0);
++		if (err) {
++			deactivate_locked_super(s);
++			return (ERR_PTR(err));
++		}
++		s->s_flags |= SB_ACTIVE;
++	} else if ((flags ^ s->s_flags) & SB_RDONLY) {
++		deactivate_locked_super(s);
++		return (ERR_PTR(-EBUSY));
++	}
++
++	return (s);
++}
++
++#ifdef HAVE_FST_MOUNT
+ static struct dentry *
+ zpl_mount(struct file_system_type *fs_type, int flags,
+     const char *osname, void *data)
+ {
+ 	zfs_mnt_t zm = { .mnt_osname = osname, .mnt_data = data };
+ 
+-	return (mount_nodev(fs_type, flags, &zm, zpl_fill_super));
++	struct super_block *sb = zpl_mount_impl(fs_type, flags, &zm);
++	if (IS_ERR(sb))
++		return (ERR_CAST(sb));
++
++	return (dget(sb->s_root));
+ }
+ #else
+ static int
+@@ -264,9 +311,15 @@ zpl_get_sb(struct file_system_type *fs_t
+ {
+ 	zfs_mnt_t zm = { .mnt_osname = osname, .mnt_data = data };
+ 
+-	return (get_sb_nodev(fs_type, flags, &zm, zpl_fill_super, mnt));
++	struct super_block *sb = zpl_mount_impl(fs_type, flags, &zm);
++	if (IS_ERR(sb))
++		return (PTR_ERR(sb));
++
++	(void) simple_set_mnt(mnt, sb);
++
++	return (0);
+ }
+-#endif /* HAVE_MOUNT_NODEV */
++#endif /* HAVE_FST_MOUNT */
+ 
+ static void
+ zpl_kill_sb(struct super_block *sb)
+@@ -333,10 +386,10 @@ const struct super_operations zpl_super_
+ struct file_system_type zpl_fs_type = {
+ 	.owner			= THIS_MODULE,
+ 	.name			= ZFS_DRIVER,
+-#ifdef HAVE_MOUNT_NODEV
++#ifdef HAVE_FST_MOUNT
+ 	.mount			= zpl_mount,
+ #else
+ 	.get_sb			= zpl_get_sb,
+-#endif /* HAVE_MOUNT_NODEV */
++#endif /* HAVE_FST_MOUNT */
+ 	.kill_sb		= zpl_kill_sb,
+ };
+Index: zfs-linux-0.7.5/tests/runfiles/linux.run
+===================================================================
+--- zfs-linux-0.7.5.orig/tests/runfiles/linux.run
++++ zfs-linux-0.7.5/tests/runfiles/linux.run
+@@ -127,7 +127,7 @@ tests = ['zfs_mount_001_pos', 'zfs_mount
+     'zfs_mount_004_pos', 'zfs_mount_005_pos', 'zfs_mount_007_pos',
+     'zfs_mount_008_pos', 'zfs_mount_009_neg', 'zfs_mount_010_neg',
+     'zfs_mount_011_neg', 'zfs_mount_012_neg', 'zfs_mount_all_001_pos',
+-    'zfs_mount_remount']
++    'zfs_mount_remount', 'zfs_multi_mount']
+ tags = ['functional', 'cli_root', 'zfs_mount']
+ 
+ [tests/functional/cli_root/zfs_promote]
+Index: zfs-linux-0.7.5/tests/zfs-tests/tests/functional/cli_root/zfs_mount/Makefile.am
+===================================================================
+--- zfs-linux-0.7.5.orig/tests/zfs-tests/tests/functional/cli_root/zfs_mount/Makefile.am
++++ zfs-linux-0.7.5/tests/zfs-tests/tests/functional/cli_root/zfs_mount/Makefile.am
+@@ -17,4 +17,5 @@ dist_pkgdata_SCRIPTS = \
+ 	zfs_mount_011_neg.ksh \
+ 	zfs_mount_012_neg.ksh \
+ 	zfs_mount_all_001_pos.ksh \
+-	zfs_mount_remount.ksh
++	zfs_mount_remount.ksh \
++	zfs_multi_mount.ksh
+Index: zfs-linux-0.7.5/tests/zfs-tests/tests/functional/cli_root/zfs_mount/zfs_multi_mount.ksh
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/tests/zfs-tests/tests/functional/cli_root/zfs_mount/zfs_multi_mount.ksh
+@@ -0,0 +1,101 @@
++#!/bin/ksh -p
++#
++# CDDL HEADER START
++#
++# This file and its contents are supplied under the terms of the
++# Common Development and Distribution License ("CDDL"), version 1.0.
++# You may only use this file in accordance with the terms of version
++# 1.0 of the CDDL.
++#
++# A full copy of the text of the CDDL should have accompanied this
++# source.  A copy is of the CDDL is also available via the Internet
++# at http://www.illumos.org/license/CDDL.
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright(c) 2018 Datto Inc.
++#
++
++. $STF_SUITE/include/libtest.shlib
++
++#
++# DESCRIPTION:
++# Verify multi mount functionality
++#
++# STRATEGY:
++# 1. Create fs
++# 2. Create and hold open file in filesystem
++# 3. Lazy unmount
++# 4. Verify remounting fs that was lazily unmounted is possible
++# 5. Verify multiple mounts of the same dataset are possible
++# 6. Verify bind mount doesn't prevent rename
++#
++
++verify_runnable "both"
++
++function cleanup
++{
++	log_must pkill -P $TAILPPID tail
++	return 0
++}
++
++log_assert "Verify multiple mounts into one namespace are possible"
++
++log_onexit cleanup
++
++# 1. Create fs
++TESTDS="$TESTPOOL/multi-mount-test"
++log_must zfs create $TESTDS
++
++# 2. Create and hold open file in filesystem
++MNTPFS="$(get_prop mountpoint $TESTDS)"
++FILENAME="$MNTPFS/file"
++log_must mkfile 128k $FILENAME
++log_must tail -f $FILENAME 1>/dev/null 2>/dev/null &
++TAILPPID=$!
++
++# 3. Lazy umount
++log_must umount -l $MNTPFS
++if [ -f $FILENAME ]; then
++	log_fail "Lazy unmount failed"
++fi
++
++# 4. Verify remounting fs that was lazily unmounted is possible
++log_must zfs mount $TESTDS
++if [ ! -f $FILENAME ]; then
++	log_fail "Lazy remount failed"
++fi
++
++# 5. Verify multiple mounts of the same dataset are possible
++MNTPFS2="$MNTPFS-second"
++FILENAME="$MNTPFS2/file"
++log_must mkdir $MNTPFS2
++log_must mount -t zfs -o zfsutil $TESTDS $MNTPFS2
++if [ ! -f $FILENAME ]; then
++	log_fail "First multi mount failed"
++fi
++
++MNTPFS3="$MNTPFS-third"
++FILENAME="$MNTPFS3/file"
++log_must mkdir $MNTPFS3
++log_must mount -t zfs -o zfsutil $TESTDS $MNTPFS3
++if [ ! -f $FILENAME ]; then
++	log_fail "Second multi mount failed"
++fi
++
++# 6. Verify bind mount doesn't prevent rename
++RENAMEFS="$TESTDS-newname"
++MNTPFS4="$MNTPFS-fourth"
++log_must mkdir $MNTPFS4
++log_must mount --bind $MNTPFS $MNTPFS4
++log_must zfs rename $TESTDS $RENAMEFS
++RENAMEMNT="$(get_prop mountpoint $RENAMEFS)"
++FILENAME="$RENAMEMNT/file"
++if [ ! -f $FILENAME ]; then
++	log_fail "Rename failed"
++fi
++log_must zfs rename $RENAMEFS $TESTDS
++
++log_pass "Multiple mounts are possible"

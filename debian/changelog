@@ -1,3 +1,14 @@
+zfs-linux (0.7.5-1ubuntu13) bionic; urgency=medium
+
+  * Allow multiple mounts of zfs datasets (LP: #1759848)
+    - Change zpl_mount() to call sget() directly with it's own test
+      callback. Passing the objset_t object as the fs data allows
+      checking if a superblock already exists for the dataset, and in
+      that case we just need to return a new reference for the sb's
+      root dentry.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 29 Mar 2018 13:58:22 +0100
+
 zfs-linux (0.7.5-1ubuntu12) bionic; urgency=medium
 
   * Fix mmap'd libaio read on non-prefaulted page deadlock (LP: #1754584)
