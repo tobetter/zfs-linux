@@ -1,3 +1,12 @@
+zfs-linux (0.7.5-1ubuntu14) bionic; urgency=medium
+
+  * Clean up symlink'd /etc/zfs/zed.d/zed-functions.sh (LP: #1757939)
+    If an existing zed-functions is a symlink then this needs removing
+    as the script in newer ZFS releases is no longer symlink'd and we
+    always want to upgrade to the newer updated script.
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 9 Apr 2018 13:20:37 +0100
+
 zfs-linux (0.7.5-1ubuntu13) bionic; urgency=medium
 
   * Allow multiple mounts of zfs datasets (LP: #1759848)
