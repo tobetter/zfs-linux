@@ -25,3 +25,4 @@ enable-zed.patch
 2101-set-zfs-share-service-to-wants.patch
 2200-add-zfs-0.7.0-ioctl-compat-shim.patch
 2201-Fix-mmap-libaio-deadlock.patch
+2202-compat-0.7.0-BLKZNAME.patch
