@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.11-1ubuntu3.4) artful; urgency=medium
+
+  * Add ZFS 0.7.0 compat fix for zvol_id (LP: #1763067)
+    The BLKZNAME ioctl msg size has changed in ZFS 0.7.0 so
+    add forwards compat handling for this ioctl by retrying
+    with this newer msg size if the first call fails
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 12 Apr 2018 11:14:23 +0100
+
 zfs-linux (0.6.5.11-1ubuntu3.3) artful; urgency=medium
 
   * Fix mmap'd libaio read on non-prefaulted page deadlock (LP: #1754584)
