@@ -1,0 +1,40 @@
+From 5e3bd0e684a3c32bd22647938247ac3699c5372a Mon Sep 17 00:00:00 2001
+From: Chunwei Chen <david.chen@nutanix.com>
+Date: Thu, 1 Feb 2018 16:28:11 -0800
+Subject: [PATCH] Fix zdb -E segfault
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+SPA_MAXBLOCKSIZE is too large for stack.
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Reviewed-by: loli10K <ezomori.nozomu@gmail.com>
+Signed-off-by: Chunwei Chen <david.chen@nutanix.com>
+Closes #7099
+---
+
+Index: zfs-linux-0.7.5/cmd/zdb/zdb.c
+===================================================================
+--- zfs-linux-0.7.5.orig/cmd/zdb/zdb.c
++++ zfs-linux-0.7.5/cmd/zdb/zdb.c
+@@ -4139,9 +4139,11 @@ zdb_embedded_block(char *thing)
+ {
+ 	blkptr_t bp;
+ 	unsigned long long *words = (void *)&bp;
+-	char buf[SPA_MAXBLOCKSIZE];
++	char buf;
+ 	int err;
+ 
++	buf = umem_alloc(SPA_MAXBLOCKSIZE, UMEM_NOFAIL);
++
+ 	memset(&bp, 0, sizeof (blkptr_t));
+ 
+ 	err = sscanf(thing, "%llx:%llx:%llx:%llx:%llx:%llx:%llx:%llx:"
+@@ -4161,6 +4163,7 @@ zdb_embedded_block(char *thing)
+ 		exit(1);
+ 	}
+ 	zdb_dump_block_raw(buf, BPE_GET_LSIZE(&bp), 0);
++	umem_free(buf, SPA_MAXBLOCKSIZE);
+ }
+ 
+ int

@@ -1,0 +1,33 @@
+From 94d49e8f9bd2e58a783066327c84b7d3b605ac0f Mon Sep 17 00:00:00 2001
+From: Tom Caputi <tcaputi@datto.com>
+Date: Wed, 11 Oct 2017 12:12:48 -0400
+Subject: [PATCH] Relax ASSERT for #6526
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+This patch resolves a minor issue where an ASSERT in
+metaslab_passivate() that only applies to non weight-based
+metaslabs was erroneously applied to all metaslabs.
+
+Signed-off-by: Tom Caputi <tcaputi@datto.com>
+---
+ module/zfs/metaslab.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/module/zfs/metaslab.c b/module/zfs/metaslab.c
+index 5e413c065..01e5234c7 100644
+--- a/module/zfs/metaslab.c
++++ b/module/zfs/metaslab.c
+@@ -1937,7 +1937,8 @@ metaslab_passivate(metaslab_t *msp, uint64_t weight)
+ 	 * this metaslab again.  In that case, it had better be empty,
+ 	 * or we would be leaving space on the table.
+ 	 */
+-	ASSERT(size >= SPA_MINBLOCKSIZE ||
++	ASSERT(!WEIGHT_IS_SPACEBASED(msp->ms_weight) ||
++	    size >= SPA_MINBLOCKSIZE ||
+ 	    range_tree_space(msp->ms_tree) == 0);
+ 	ASSERT0(weight & METASLAB_ACTIVE_MASK);
+ 
+-- 
+2.15.1
+

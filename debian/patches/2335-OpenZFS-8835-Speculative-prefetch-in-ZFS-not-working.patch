@@ -1,0 +1,79 @@
+From 916384729e5d828e578c8f5c3003742360fb89ea Mon Sep 17 00:00:00 2001
+From: Alexander Motin <mav@FreeBSD.org>
+Date: Mon, 20 Nov 2017 19:56:01 +0200
+Subject: [PATCH] OpenZFS 8835 - Speculative prefetch in ZFS not working for
+ misaligned reads
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+In case of misaligned I/O sequential requests are not detected as such
+due to overlaps in logical block sequence:
+
+    dmu_zfetch(fffff80198dd0ae0, 27347, 9, 1)
+    dmu_zfetch(fffff80198dd0ae0, 27355, 9, 1)
+    dmu_zfetch(fffff80198dd0ae0, 27363, 9, 1)
+    dmu_zfetch(fffff80198dd0ae0, 27371, 9, 1)
+    dmu_zfetch(fffff80198dd0ae0, 27379, 9, 1)
+    dmu_zfetch(fffff80198dd0ae0, 27387, 9, 1)
+
+This patch makes single block overlap to be counted as a stream hit,
+improving performance up to several times.
+
+Authored by: Alexander Motin <mav@FreeBSD.org>
+Approved by: Gordon Ross <gwr@nexenta.com>
+Reviewed by: Matthew Ahrens <mahrens@delphix.com>
+Reviewed by: Allan Jude <allanjude@freebsd.org>
+Reviewed by: Gvozden Neskovic <neskovic@gmail.com>
+Reviewed by: George Melikov <mail@gmelikov.ru>
+Ported-by: Brian Behlendorf <behlendorf1@llnl.gov>
+
+OpenZFS-issue: https://www.illumos.org/issues/8835
+OpenZFS-commit: https://github.com/openzfs/openzfs/commit/aab6dd482a
+Closes #7062
+---
+ module/zfs/dmu_zfetch.c | 24 +++++++++++++++++++-----
+ 1 file changed, 19 insertions(+), 5 deletions(-)
+
+Index: zfs-linux-0.7.5/module/zfs/dmu_zfetch.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/dmu_zfetch.c
++++ zfs-linux-0.7.5/module/zfs/dmu_zfetch.c
+@@ -228,19 +228,33 @@ dmu_zfetch(zfetch_t *zf, uint64_t blkid,
+ 
+ 	rw_enter(&zf->zf_rwlock, RW_READER);
+ 
++	/*
++	 * Find matching prefetch stream.  Depending on whether the accesses
++	 * are block-aligned, first block of the new access may either follow
++	 * the last block of the previous access, or be equal to it.
++	 */
+ 	for (zs = list_head(&zf->zf_stream); zs != NULL;
+ 	    zs = list_next(&zf->zf_stream, zs)) {
+-		if (blkid == zs->zs_blkid) {
++		if (blkid == zs->zs_blkid || blkid + 1 == zs->zs_blkid) {
+ 			mutex_enter(&zs->zs_lock);
+ 			/*
+ 			 * zs_blkid could have changed before we
+ 			 * acquired zs_lock; re-check them here.
+ 			 */
+-			if (blkid != zs->zs_blkid) {
+-				mutex_exit(&zs->zs_lock);
+-				continue;
++			if (blkid == zs->zs_blkid) {
++				break;
++			} else if (blkid + 1 == zs->zs_blkid) {
++				blkid++;
++				nblks--;
++				if (nblks == 0) {
++					/* Already prefetched this before. */
++					mutex_exit(&zs->zs_lock);
++					rw_exit(&zf->zf_rwlock);
++					return;
++				}
++				break;
+ 			}
+-			break;
++			mutex_exit(&zs->zs_lock);
+ 		}
+ 	}
+ 
