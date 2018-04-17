@@ -1,0 +1,52 @@
+From 05f85a6a64e999748ffbdf7a76b406f0f0ceb8b3 Mon Sep 17 00:00:00 2001
+From: Chunwei Chen <tuxoko@gmail.com>
+Date: Mon, 21 Aug 2017 13:11:11 -0700
+Subject: [PATCH] Fix zfs_ioc_pool_sync should not use fnvlist
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Use fnvlist on user input would allow user to easily panic zfs.
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Reviewed-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Reviewed-by: Alek Pinchuk <apinchuk@datto.com>
+Signed-off-by: Chunwei Chen <david.chen@osnexus.com>
+Closes #6529
+---
+ module/zfs/zfs_ioctl.c | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+Index: zfs-linux-0.7.5/module/zfs/zfs_ioctl.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/zfs_ioctl.c
++++ zfs-linux-0.7.5/module/zfs/zfs_ioctl.c
+@@ -5909,20 +5909,26 @@ static int
+ zfs_ioc_pool_sync(const char *pool, nvlist_t *innvl, nvlist_t *onvl)
+ {
+ 	int err;
+-	boolean_t force;
++	boolean_t force = B_FALSE;
+ 	spa_t *spa;
+ 
+ 	if ((err = spa_open(pool, &spa, FTAG)) != 0)
+ 		return (err);
+ 
+-	force = fnvlist_lookup_boolean_value(innvl, "force");
++	if (innvl) {
++		if (nvlist_lookup_boolean_value(innvl, "force", &force) != 0) {
++			err = SET_ERROR(EINVAL);
++			goto out;
++		}
++	}
++
+ 	if (force) {
+ 		spa_config_enter(spa, SCL_CONFIG, FTAG, RW_WRITER);
+ 		vdev_config_dirty(spa->spa_root_vdev);
+ 		spa_config_exit(spa, SCL_CONFIG, FTAG);
+ 	}
+ 	txg_wait_synced(spa_get_dsl(spa), 0);
+-
++out:
+ 	spa_close(spa, FTAG);
+ 
+ 	return (err);

@@ -1,0 +1,43 @@
+From d9549cba9640cd3b09d76b8cbd54387728b7be24 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Arkadiusz=20Buba=C5=82a?= <arkadiusz.bubala@open-e.com>
+Date: Mon, 11 Sep 2017 19:25:01 +0200
+Subject: [PATCH] Fix false config_cache_write events
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+On pool import when the old cache file is removed
+the ereport.fs.zfs.config_cache_write event is generated.
+Because zpool export always removes cache file it happens
+every export - import sequence.
+
+Reviewed-by: George Melikov <mail@gmelikov.ru>
+Reviewed-by: loli10K <ezomori.nozomu@gmail.com>
+Reviewed-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Signed-off-by: Arkadiusz Bubała <arkadiusz.bubala@open-e.com>
+Closes #6617
+---
+ module/zfs/spa_config.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/module/zfs/spa_config.c b/module/zfs/spa_config.c
+index 7e712d368..8459e7362 100644
+--- a/module/zfs/spa_config.c
++++ b/module/zfs/spa_config.c
+@@ -162,6 +162,11 @@ spa_config_write(spa_config_dirent_t *dp, nvlist_t *nvl)
+ 	 */
+ 	if (nvl == NULL) {
+ 		err = vn_remove(dp->scd_path, UIO_SYSSPACE, RMFILE);
++		/*
++		 * Don't report an error when the cache file is already removed
++		 */
++		if (err == ENOENT)
++			err = 0;
+ 		return (err);
+ 	}
+ 
+-- 
+2.15.1
+

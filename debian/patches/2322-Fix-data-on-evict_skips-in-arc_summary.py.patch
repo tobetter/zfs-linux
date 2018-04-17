@@ -1,0 +1,49 @@
+From 8d187769736688044c3c58a6a56069a54210a656 Mon Sep 17 00:00:00 2001
+From: "Scot W. Stevenson" <scot.stevenson@gmail.com>
+Date: Sat, 18 Nov 2017 23:07:04 +0100
+Subject: [PATCH] Fix data on evict_skips in arc_summary.py
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Display correct data from kstat arcstats for evict_skips,
+which is currently repeating the data from mutex_misses.
+Fixes #6882
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Reviewed-by: George Melikov <mail@gmelikov.ru>
+Reviewed-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Signed-off-by: Scot W. Stevenson <scot.stevenson@gmail.com>
+Closes #6882
+Closes #6883
+---
+ cmd/arc_summary/arc_summary.py | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+Index: zfs-linux-0.7.5/cmd/arc_summary/arc_summary.py
+===================================================================
+--- zfs-linux-0.7.5.orig/cmd/arc_summary/arc_summary.py
++++ zfs-linux-0.7.5/cmd/arc_summary/arc_summary.py
+@@ -176,12 +176,13 @@ def get_arc_summary(Kstat):
+     # ARC Misc.
+     deleted = Kstat["kstat.zfs.misc.arcstats.deleted"]
+     mutex_miss = Kstat["kstat.zfs.misc.arcstats.mutex_miss"]
++    evict_skip = Kstat["kstat.zfs.misc.arcstats.evict_skip"]
+ 
+     # ARC Misc.
+     output["arc_misc"] = {}
+     output["arc_misc"]["deleted"] = fHits(deleted)
+     output["arc_misc"]['mutex_miss'] = fHits(mutex_miss)
+-    output["arc_misc"]['evict_skips'] = fHits(mutex_miss)
++    output["arc_misc"]['evict_skips'] = fHits(evict_skip)
+ 
+     # ARC Sizing
+     arc_size = Kstat["kstat.zfs.misc.arcstats.size"]
+@@ -276,7 +277,7 @@ def _arc_summary(Kstat):
+     sys.stdout.write("\tMutex Misses:\t\t\t\t%s\n" %
+                      arc['arc_misc']['mutex_miss'])
+     sys.stdout.write("\tEvict Skips:\t\t\t\t%s\n" %
+-                     arc['arc_misc']['mutex_miss'])
++                     arc['arc_misc']['evict_skips'])
+     sys.stdout.write("\n")
+ 
+     # ARC Sizing

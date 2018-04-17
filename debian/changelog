@@ -1,3 +1,117 @@
+zfs-linux (0.7.5-1ubuntu15) bionic; urgency=medium
+
+  * Apply and/or backport upstream bugfixes (LP: #1764690)
+    - OpenZFS 8373 - TXG_WAIT in ZIL commit path
+      Closes zfsonlinux #6403
+    - zfs promote|rename .../%recv should be an error
+      Closes zfsonlinux #4843, #6339
+    - Fix parsable 'zfs get' for compressratios
+      Closes zfsonlinux #6436, #6449
+    - Fix zpool events scripted mode tab separator
+      Closes zfsonlinux #6444, #6445
+    - zv_suspend_lock in zvol_open()/zvol_release()
+      Closes zfsonlinux #6342
+    - Allow longer SPA names in stats, allows bigger pool names
+      Closes zfsonlinux #6481
+    - vdev_mirror: load balancing fixes
+      Closes zfsonlinux #6461
+    - Fix zfs_ioc_pool_sync should not use fnvlist
+      Closes zfsonlinux #6529
+    - OpenZFS 8375 - Kernel memory leak in nvpair code
+      Closes zfsonlinux #6578
+    - OpenZFS 7261 - nvlist code should enforce name length limit
+      Closes zfsonlinux #6579
+    - OpenZFS 5778 - nvpair_type_is_array() does not recognize
+      DATA_TYPE_INT8_ARRAY
+      Closes zfsonlinux #6580
+    - dmu_objset: release bonus buffer in failure path
+      Closes zfsonlinux #6575
+    - Fix false config_cache_write events
+      Closes zfsonlinux #6617
+    - Fix printk() calls missing log level
+      Closes zfsonlinux #6672
+    - Fix abdstats kstat on 32-bit systems
+      Closes zfsonlinux #6721
+    - Relax ASSERT for #6526
+      Closes zfsonlinux #6526
+    - Fix coverity defects: 147480, 147584 (Logically dead code)
+      Closes zfsonlinux #6745
+    - Fix coverity defects: CID 161388 (Resource Leak)
+      Closes zfsonlinux #6755
+    - Use ashift=12 by default on SSDSC2BW48 disks
+      Closes zfsonlinux #6774
+    - OpenZFS 8558, 8602 - lwp_create() returns EAGAIN
+      Closes zfsonlinux #6779
+    - ZFS send fails to dump objects larger than 128PiB
+      Closes zfsonlinux #6760
+    - Sort output of tunables in arc_summary.py
+      Closes zfsonlinux #6828
+    - Fix data on evict_skips in arc_summary.py
+      Closes zfsonlinux #6882, #6883
+    - Fix segfault in zpool iostat when adding VDEVs
+      Closes zfsonlinux #6748, #6872
+    - ZTS: Fix create-o_ashift test case
+      Closes zfsonlinux #6924, #6877
+    - Handle invalid options in arc_summary
+      Closes zfsonlinux #6983
+    - Call commit callbacks from the tail of the list
+      Closes zfsonlinux #6986
+    - Fix 'zpool add' handling of nested interior VDEVs
+      Closes zfsonlinux #6678, #6996
+    - Fix -fsanitize=address memory leak
+      kmem_alloc(0, ...) in userspace returns a leakable pointer.
+      Closes zfsonlinux #6941
+    - Revert raidz_map and _col structure types
+      Closes zfsonlinux #6981, #7023
+    - Use zap_count instead of cached z_size for unlink
+      Closes zfsonlinux #7019
+    - OpenZFS 8897 - zpool online -e fails assertion when run on non-leaf
+      vdevs
+      Closes zfsonlinux #7030 
+    - OpenZFS 8898 - creating fs with checksum=skein on the boot pools
+      fails ungracefully
+      Closes zfsonlinux #7031 
+    - Emit an error message before MMP suspends pool
+      Closes zfsonlinux #7048
+    - OpenZFS 8641 - "zpool clear" and "zinject" don't work on "spare"
+      or "replacing" vdevs
+      Closes zfsonlinux #7060
+    - OpenZFS 8835 - Speculative prefetch in ZFS not working for
+      misaligned reads
+      Closes zfsonlinux #7062
+    - OpenZFS 8972 - zfs holds: In scripted mode, do not pad columns with
+      spaces
+      Closes zfsonlinux #7063
+    - Revert "Remove wrong ASSERT in annotate_ecksum"
+      Closes zfsonlinux #7079
+    - OpenZFS 8731 - ASSERT3U(nui64s, <=, UINT16_MAX) fails for large
+      blocks 
+      Closes zfsonlinux #7079
+    - Prevent zdb(8) from occasionally hanging on I/O
+      Closes zfsonlinux #6999
+    - Fix 'zfs receive -o' when used with '-e|-d'
+      Closes zfsonlinux #7088 
+    - Change movaps to movups in AES-NI code
+      Closes zfsonlinux #7065, #7108
+    - tx_waited -> tx_dirty_delayed in trace_dmu.h
+      Closes zfsonlinux #7096 
+    - OpenZFS 8966 - Source file zfs_acl.c, function
+      Closes zfsonlinux #7141
+    - Fix zdb -c traverse stop on damaged objset root
+      Closes zfsonlinux #7099
+    - Fix zle_decompress out of bound access
+      Closes zfsonlinux #7099
+    - Fix racy assignment of zcb.zcb_haderrors
+      Closes zfsonlinux #7099
+    - Fix zdb -R decompression
+      Closes zfsonlinux #7099, #4984
+    - Fix zdb -E segfault
+      Closes zfsonlinux #7099
+    - Fix zdb -ed on objset for exported pool
+      Closes zfsonlinux #7099, #6464
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 17 Apr 2018 10:18:54 +0100
+
 zfs-linux (0.7.5-1ubuntu14) bionic; urgency=medium
 
   * Clean up symlink'd /etc/zfs/zed.d/zed-functions.sh (LP: #1757939)

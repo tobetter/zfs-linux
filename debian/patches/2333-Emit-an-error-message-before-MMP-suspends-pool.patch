@@ -1,0 +1,43 @@
+From 51d1b58ef3467c3a9711c65458f93063dd17354f Mon Sep 17 00:00:00 2001
+From: "John L. Hammond" <35266395+jhammond-intel@users.noreply.github.com>
+Date: Wed, 17 Jan 2018 14:24:42 -0600
+Subject: [PATCH] Emit an error message before MMP suspends pool
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+In mmp_thread(), emit an MMP specific error message before calling
+zio_suspend() so that the administrator will understand why the pool
+is being suspended.
+
+Reviewed-by: Olaf Faaland <faaland1@llnl.gov>
+Reviewed-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: John L. Hammond <john.hammond@intel.com>
+Closes #7048
+---
+ module/zfs/mmp.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Index: zfs-linux-0.7.5/module/zfs/mmp.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/mmp.c
++++ zfs-linux-0.7.5/module/zfs/mmp.c
+@@ -26,6 +26,7 @@
+ #include <sys/mmp.h>
+ #include <sys/spa.h>
+ #include <sys/spa_impl.h>
++#include <sys/time.h>
+ #include <sys/vdev.h>
+ #include <sys/vdev_impl.h>
+ #include <sys/zfs_context.h>
+@@ -428,6 +429,10 @@ mmp_thread(spa_t *spa)
+ 		 */
+ 		if (!suspended && mmp_fail_intervals && multihost &&
+ 		    (start - mmp->mmp_last_write) > max_fail_ns) {
++			cmn_err(CE_WARN, "MMP writes to pool '%s' have not "
++			    "succeeded in over %llus; suspending pool",
++			    spa_name(spa),
++			    NSEC2SEC(start - mmp->mmp_last_write));
+ 			zio_suspend(spa, NULL);
+ 		}
+ 
