@@ -99,6 +99,13 @@ Description: OpenZFS filesystem kernel modules for Linux
  This DKMS package includes the SPA, DMU, ZVOL, and ZPL components of
  OpenZFS.
 
+Package: zfs-doc
+Section: contrib/doc
+Architecture: all
+Depends: ${misc:Depends}
+Description: Native OpenZFS filesystem documentation and examples.
+ Shared boilerplate files for OpenZFS on Linux that are not required at runtime.
+
 Package: zfs-initramfs
 Architecture: all
 Depends: initramfs-tools,

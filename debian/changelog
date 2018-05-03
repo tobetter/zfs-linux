@@ -1,3 +1,11 @@
+zfs-linux (0.7.5-1ubuntu16) bionic; urgency=medium
+
+  * Add back missing zfs-doc package (LP: #1768777)
+    - this was accidentally removed from Bionic, restore it
+      to keep the doc symlinks sane.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 3 May 2018 16:51:11 +0100
+
 zfs-linux (0.7.5-1ubuntu15) bionic; urgency=medium
 
   * Apply and/or backport upstream bugfixes (LP: #1764690)
