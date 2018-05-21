@@ -65,3 +65,9 @@ enable-zed.patch
 2347-Fix-zdb-R-decompression.patch
 2348-Fix-zdb-E-segfault.patch
 2349-Fix-zdb-ed-on-objset-for-exported-pool.patch
+3000-Linux-4.16-compat-inode_set_iversion.patch
+3001-Linux-4.16-compat-use-correct-_dec_and_test.patch
+3002-Linux-4.16-compat-get_disk_and_module.patch
+3003-Linux-compat-4.16-blk_queue_flag_-set-clear.patch
+3004-Linux-compat-4.16-blk_queue_flag_-set-clear.patch
+3005-Linux-4.11-compat-avoid-refcount_t-name-conflict.patch
