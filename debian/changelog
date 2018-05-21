@@ -1,3 +1,15 @@
+zfs-linux (0.7.5-1ubuntu17) cosmic; urgency=medium
+
+  * Apply upstream 4.16 compat fixes:
+   - 3000-Linux-4.16-compat-inode_set_iversion.patch
+   - 3001-Linux-4.16-compat-use-correct-_dec_and_test.patch
+   - 3002-Linux-4.16-compat-get_disk_and_module.patch
+   - 3003-Linux-compat-4.16-blk_queue_flag_-set-clear.patch
+   - 3004-Linux-compat-4.16-blk_queue_flag_-set-clear.patch
+   - 3005-Linux-4.11-compat-avoid-refcount_t-name-conflict.patch
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 21 May 2018 11:54:12 +0100
+
 zfs-linux (0.7.5-1ubuntu16) bionic; urgency=medium
 
   * Add back missing zfs-doc package (LP: #1768777)

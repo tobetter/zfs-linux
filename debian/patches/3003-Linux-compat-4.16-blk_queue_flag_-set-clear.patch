@@ -1,0 +1,135 @@
+From 10f88c5cd523eec8431941abf00017fc8fb67fd3 Mon Sep 17 00:00:00 2001
+From: Giuseppe Di Natale <dinatale2@users.noreply.github.com>
+Date: Tue, 10 Apr 2018 10:32:14 -0700
+Subject: [PATCH] Linux compat 4.16: blk_queue_flag_{set,clear}
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+queue_flag_{set,clear}_unlocked are now private interfaces in
+the Linux kernel (https://github.com/torvalds/linux/commit/8a0ac14).
+Use blk_queue_flag_{set,clear} interfaces which were introduced as
+of https://github.com/torvalds/linux/commit/8814ce8.
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Closes #7410
+---
+ config/kernel-blk-queue-flags.m4 | 38 ++++++++++++++++++++++++++++++++
+ config/kernel.m4                 |  2 ++
+ include/linux/blkdev_compat.h    | 16 ++++++++++++++
+ module/zfs/zvol.c                |  8 +++----
+ 4 files changed, 60 insertions(+), 4 deletions(-)
+ create mode 100644 config/kernel-blk-queue-flags.m4
+
+Index: zfs-linux-0.7.5/config/kernel-blk-queue-flags.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/config/kernel-blk-queue-flags.m4
+@@ -0,0 +1,38 @@
++dnl #
++dnl # API change
++dnl # https://github.com/torvalds/linux/commit/8814ce8
++dnl # Introduction of blk_queue_flag_set and blk_queue_flag_clear
++dnl #
++
++AC_DEFUN([ZFS_AC_KERNEL_BLK_QUEUE_FLAG_SET], [
++	AC_MSG_CHECKING([whether blk_queue_flag_set() exists])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/kernel.h>
++		#include <linux/blkdev.h>
++	],[
++		struct request_queue *q = NULL;
++		blk_queue_flag_set(0, q);
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_BLK_QUEUE_FLAG_SET, 1, [blk_queue_flag_set() exists])
++	],[
++		AC_MSG_RESULT(no)
++	])
++])
++
++AC_DEFUN([ZFS_AC_KERNEL_BLK_QUEUE_FLAG_CLEAR], [
++	AC_MSG_CHECKING([whether blk_queue_flag_clear() exists])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/kernel.h>
++		#include <linux/blkdev.h>
++	],[
++		struct request_queue *q = NULL;
++		blk_queue_flag_clear(0, q);
++	],[
++
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_BLK_QUEUE_FLAG_CLEAR, 1, [blk_queue_flag_clear() exists])
++	],[
++		AC_MSG_RESULT(no)
++	])
++])
+Index: zfs-linux-0.7.5/config/kernel.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/kernel.m4
++++ zfs-linux-0.7.5/config/kernel.m4
+@@ -35,6 +35,8 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_BIO_RW_BARRIER
+ 	ZFS_AC_KERNEL_BIO_RW_DISCARD
+ 	ZFS_AC_KERNEL_BLK_QUEUE_BDI
++	ZFS_AC_KERNEL_BLK_QUEUE_FLAG_CLEAR
++	ZFS_AC_KERNEL_BLK_QUEUE_FLAG_SET
+ 	ZFS_AC_KERNEL_BLK_QUEUE_FLUSH
+ 	ZFS_AC_KERNEL_BLK_QUEUE_MAX_HW_SECTORS
+ 	ZFS_AC_KERNEL_BLK_QUEUE_MAX_SEGMENTS
+Index: zfs-linux-0.7.5/include/linux/blkdev_compat.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/linux/blkdev_compat.h
++++ zfs-linux-0.7.5/include/linux/blkdev_compat.h
+@@ -37,6 +37,22 @@
+ typedef unsigned __bitwise__ fmode_t;
+ #endif /* HAVE_FMODE_T */
+ 
++#ifndef HAVE_BLK_QUEUE_FLAG_SET
++static inline void
++blk_queue_flag_set(unsigned int flag, struct request_queue *q)
++{
++	queue_flag_set_unlocked(flag, q);
++}
++#endif
++
++#ifndef HAVE_BLK_QUEUE_FLAG_CLEAR
++static inline void
++blk_queue_flag_clear(unsigned int flag, struct request_queue *q)
++{
++	queue_flag_clear_unlocked(flag, q);
++}
++#endif
++
+ /*
+  * 4.7 - 4.x API,
+  * The blk_queue_write_cache() interface has replaced blk_queue_flush()
+Index: zfs-linux-0.7.5/module/zfs/zvol.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/zvol.c
++++ zfs-linux-0.7.5/module/zfs/zvol.c
+@@ -1684,7 +1684,7 @@ zvol_alloc(dev_t dev, const char *name)
+ 	blk_queue_set_read_ahead(zv->zv_queue, 1);
+ 
+ 	/* Disable write merging in favor of the ZIO pipeline. */
+-	queue_flag_set_unlocked(QUEUE_FLAG_NOMERGES, zv->zv_queue);
++	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, zv->zv_queue);
+ 
+ 	zv->zv_disk = alloc_disk(ZVOL_MINORS);
+ 	if (zv->zv_disk == NULL)
+@@ -1835,12 +1835,12 @@ zvol_create_minor_impl(const char *name)
+ 	blk_queue_max_discard_sectors(zv->zv_queue,
+ 	    (zvol_max_discard_blocks * zv->zv_volblocksize) >> 9);
+ 	blk_queue_discard_granularity(zv->zv_queue, zv->zv_volblocksize);
+-	queue_flag_set_unlocked(QUEUE_FLAG_DISCARD, zv->zv_queue);
++	blk_queue_flag_set(QUEUE_FLAG_DISCARD, zv->zv_queue);
+ #ifdef QUEUE_FLAG_NONROT
+-	queue_flag_set_unlocked(QUEUE_FLAG_NONROT, zv->zv_queue);
++	blk_queue_flag_set(QUEUE_FLAG_NONROT, zv->zv_queue);
+ #endif
+ #ifdef QUEUE_FLAG_ADD_RANDOM
+-	queue_flag_clear_unlocked(QUEUE_FLAG_ADD_RANDOM, zv->zv_queue);
++	blk_queue_flag_clear(QUEUE_FLAG_ADD_RANDOM, zv->zv_queue);
+ #endif
+ 
+ 	if (spa_writeable(dmu_objset_spa(os))) {
