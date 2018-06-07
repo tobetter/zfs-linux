@@ -65,3 +65,4 @@ enable-zed.patch
 2347-Fix-zdb-R-decompression.patch
 2348-Fix-zdb-E-segfault.patch
 2349-Fix-zdb-ed-on-objset-for-exported-pool.patch
+3100-remove-libzfs-module-timeout.patch
