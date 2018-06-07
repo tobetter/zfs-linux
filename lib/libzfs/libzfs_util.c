@@ -712,11 +712,20 @@ static int
 libzfs_load_module(const char *module)
 {
 	char *argv[4] = {"/sbin/modprobe", "-q", (char *)module, (char *)0};
-	char *load_str, *timeout_str, *container_str;
+	char *load_str, *timeout_str;
 	long timeout = 10; /* seconds */
 	long busy_timeout = 10; /* milliseconds */
 	int load = 0, fd;
 	hrtime_t start;
+
+	/*
+	 * If inside a container, set the timeout to zero (LP: #1760173),
+	 * however, this can be over-ridden by ZFS_MODULE_TIMEOUT just
+	 * in case the user explicitly wants to set the timeout for some
+	 * reason just for backward compatibilty
+	 */
+	if (access("/run/systemd/container", R_OK) == 0)
+		timeout = 0;
 
 	/* Optionally request module loading */
 	if (!libzfs_module_loaded(module)) {
@@ -737,16 +746,6 @@ libzfs_load_module(const char *module)
 	if (!libzfs_module_loaded(module))
 		return (ENXIO);
 
-	/*
-	 * If inside a container, set the timeout to zero (LP: #1760173),
-	 * however, this can be over-ridden by ZFS_MODULE_TIMEOUT just
-	 * in case the user explicitly wants to set the timeout for some
-	 * reason just for backward compatibilty
-	 */
-	container_str = getenv("container");
-	if (container_str) 
-		timeout = 0;
-	
 	/*
 	 * Device creation by udev is asynchronous and waiting may be
 	 * required.  Busy wait for 10ms and then fall back to polling every
