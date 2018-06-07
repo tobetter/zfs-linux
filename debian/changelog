@@ -1,3 +1,10 @@
+zfs-linux (0.7.5-1ubuntu18) cosmic; urgency=medium
+
+  * Set timeout to zero for zfs list or zpool status
+    when running inside a container (LP: #1760173)
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 7 Jun 2018 09:55:11 +0100
+
 zfs-linux (0.7.5-1ubuntu17) cosmic; urgency=medium
 
   * Apply upstream 4.16 compat fixes:
