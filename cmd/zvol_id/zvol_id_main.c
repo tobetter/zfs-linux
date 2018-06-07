@@ -35,15 +35,25 @@
 #include <sys/zfs_znode.h>
 #include <sys/fs/zfs.h>
 
+#define ZFS_MAXNAMELEN_V7	(ZFS_MAXNAMELEN + 1)
+#define BLKZNAME_V7		_IOR(0x12, 125, char[ZFS_MAXNAMELEN_V7])
+
 static int
 ioctl_get_msg(char *var, int fd)
 {
 	int error = 0;
-	char msg[ZFS_MAXNAMELEN];
+	char msg[ZFS_MAXNAMELEN_V7];
 
 	error = ioctl(fd, BLKZNAME, msg);
 	if (error < 0) {
-		return (error);
+		if (errno == ENOTTY) {
+			/*
+			 *  Retry with V7 msg size
+			 */
+			error = ioctl(fd, BLKZNAME_V7, msg);
+			if (errno < 0)
+				return (error);
+		}
 	}
 
 	snprintf(var, ZFS_MAXNAMELEN, "%s", msg);
