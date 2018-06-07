@@ -1,3 +1,10 @@
+zfs-linux (0.6.5.6-0ubuntu22) xenial; urgency=medium
+
+  * Set timeout to zero for zfs list or zpool status
+    when running inside a container (LP: #1760173)
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 7 Jun 2018 09:55:11 +0100
+
 zfs-linux (0.6.5.6-0ubuntu21) xenial; urgency=medium
 
   * Add ZFS 0.7.0 compat fix for zvol_id (LP: #1763067)
