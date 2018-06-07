@@ -1,3 +1,12 @@
+zfs-linux (0.7.5-1ubuntu16.2) bionic; urgency=medium
+
+  * Revert previous fix, re-work by checking for
+    a container using /run/systemd/container and
+    set timeout to zero for zfs list or zpool status
+    when running inside a container (LP: #1760173)
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 7 Jun 2018 17:25:12 +0100
+
 zfs-linux (0.7.5-1ubuntu16.1) bionic; urgency=medium
 
   * Set timeout to zero for zfs list or zpool status
