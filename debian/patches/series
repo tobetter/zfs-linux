@@ -71,3 +71,4 @@ enable-zed.patch
 3003-Linux-compat-4.16-blk_queue_flag_-set-clear.patch
 3004-Linux-compat-4.16-blk_queue_flag_-set-clear.patch
 3005-Linux-4.11-compat-avoid-refcount_t-name-conflict.patch
+3100-remove-libzfs-module-timeout.patch
