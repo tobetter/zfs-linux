@@ -1,10 +1,18 @@
+zfs-linux (0.6.5.11-1ubuntu3.6) artful; urgency=medium
+
+  * Revert previous fix, re-work by checking for
+    a container using /run/systemd/container and
+    set timeout to zero for zfs list or zpool status
+    when running inside a container (LP: #1760173)
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 7 Jun 2018 17:25:12 +0100
+
 zfs-linux (0.6.5.11-1ubuntu3.5) artful; urgency=medium
 
   * Set timeout to zero for zfs list or zpool status
     when running inside a container (LP: #1760173)
 
  -- Colin Ian King <colin.king@canonical.com>  Thu, 7 Jun 2018 09:55:11 +0100
-
 
 zfs-linux (0.6.5.11-1ubuntu3.4) artful; urgency=medium
 
