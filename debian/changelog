@@ -1,3 +1,14 @@
+zfs-linux (0.6.5.6-0ubuntu24) xenial; urgency=medium
+
+  * Allow multiple mounts of zfs datasets (LP: #1759848)
+    - Change zpl_mount() to call sget() directly with it's own test
+      callback. Passing the objset_t object as the fs data allows
+      checking if a superblock already exists for the dataset, and in
+      that case we just need to return a new reference for the sb's
+      root dentry.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 25 Jun 2018 14:31:14 +0100
+
 zfs-linux (0.6.5.6-0ubuntu23) xenial; urgency=medium
 
   * Revert previous fix, re-work by checking for
