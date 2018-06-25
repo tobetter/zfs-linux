@@ -1,0 +1,265 @@
+From 1a5b486c105ff5ddc4bc7560bb303630cf2ce1bb Mon Sep 17 00:00:00 2001
+From: Seth Forshee <seth.forshee@canonical.com>
+Date: Tue, 20 Mar 2018 15:20:52 -0400
+Subject: [PATCH] Allow mounting datasets more than once
+
+Currently mounting an already mounted zfs dataset results in an
+error, whereas it is typically allowed with other filesystems.
+This causes some bad interactions with mount namespaces. Take
+this sequence for example:
+
+ - Create a dataset
+ - Create a snapshot of the dataset
+ - Create a clone of the snapshot
+ - Create a new mount namespace
+ - Rename the original dataset
+
+The rename results in unmounting and remounting the clone in the
+original mount namespace, however the remount fails because the
+dataset is still mounted in the new mount namespace. (Note that
+this means the mount in the new mount namespace is never being
+unmounted, so perhaps the unmount/remount of the clone isn't
+actually necessary.)
+
+The problem here is a result of the way mounting is implemented
+in the kernel module. Since it is not mounting block devices it
+uses mount_nodev() instead of the usual mount_bdev(). However,
+mount_nodev() is written for filesystems for which each mount is
+a new instance (i.e. a new super block), and zfs should be able
+to detect when a mount request can be satisfied using an existing
+super block.
+
+Change zpl_mount() to call sget() directly with it's own test
+callback. Passing the objset_t object as the fs data allows
+checking if a superblock already exists for the dataset, and in
+that case we just need to return a new reference for the sb's
+root dentry.
+
+Signed-off-by: Seth Forshee <seth.forshee@canonical.com>
+Closes #5796
+(backport removal of tests as these don't exist in artful ZFS)
+(backport changes to zfs mount flags using older zmo structs)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+
+---
+
+Index: zfs-linux-0.6.5.6/config/kernel-fst-mount.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.6.5.6/config/kernel-fst-mount.m4
+@@ -0,0 +1,28 @@
++dnl #
++dnl # 2.6.38 API change
++dnl # The .get_sb callback has been replaced by a .mount callback
++dnl # in the file_system_type structure.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_FST_MOUNT], [
++        AC_MSG_CHECKING([whether fst->mount() exists])
++        ZFS_LINUX_TRY_COMPILE([
++                #include <linux/fs.h>
++
++                static struct dentry *
++                mount(struct file_system_type *fs_type, int flags,
++                    const char *osname, void *data) {
++                        struct dentry *d = NULL;
++                        return (d);
++                }
++
++                static struct file_system_type fst __attribute__ ((unused)) = {
++                        .mount = mount,
++                };
++        ],[
++        ],[
++                AC_MSG_RESULT(yes)
++                AC_DEFINE(HAVE_FST_MOUNT, 1, [fst->mount() exists])
++        ],[
++                AC_MSG_RESULT(no)
++        ])
++])
+Index: zfs-linux-0.6.5.6/config/kernel-mount-nodev.m4
+===================================================================
+--- zfs-linux-0.6.5.6.orig/config/kernel-mount-nodev.m4
++++ /dev/null
+@@ -1,20 +0,0 @@
+-dnl #
+-dnl # 2.6.39 API change
+-dnl # The .get_sb callback has been replaced by a .mount callback
+-dnl # in the file_system_type structure.  When using the new
+-dnl # interface the caller must now use the mount_nodev() helper.
+-dnl # This updated callback and helper no longer pass the vfsmount.
+-dnl #
+-AC_DEFUN([ZFS_AC_KERNEL_MOUNT_NODEV],
+-	[AC_MSG_CHECKING([whether mount_nodev() is available])
+-	ZFS_LINUX_TRY_COMPILE_SYMBOL([
+-		#include <linux/fs.h>
+-	], [
+-		mount_nodev(NULL, 0, NULL, NULL);
+-	], [mount_nodev], [fs/super.c], [
+-		AC_MSG_RESULT(yes)
+-		AC_DEFINE(HAVE_MOUNT_NODEV, 1, [mount_nodev() is available])
+-	], [
+-		AC_MSG_RESULT(no)
+-	])
+-])
+Index: zfs-linux-0.6.5.6/config/kernel.m4
+===================================================================
+--- zfs-linux-0.6.5.6.orig/config/kernel.m4
++++ zfs-linux-0.6.5.6/config/kernel.m4
+@@ -77,7 +77,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_TRUNCATE_SETSIZE
+ 	ZFS_AC_KERNEL_6ARGS_SECURITY_INODE_INIT_SECURITY
+ 	ZFS_AC_KERNEL_CALLBACK_SECURITY_INODE_INIT_SECURITY
+-	ZFS_AC_KERNEL_MOUNT_NODEV
++	ZFS_AC_KERNEL_FST_MOUNT
+ 	ZFS_AC_KERNEL_SHRINK
+ 	ZFS_AC_KERNEL_SHRINK_CONTROL_HAS_NID
+ 	ZFS_AC_KERNEL_S_INSTANCES_LIST_HEAD
+Index: zfs-linux-0.6.5.6/module/zfs/zpl_super.c
+===================================================================
+--- zfs-linux-0.6.5.6.orig/module/zfs/zpl_super.c
++++ zfs-linux-0.6.5.6/module/zfs/zpl_super.c
+@@ -443,12 +443,56 @@ zpl_fill_super(struct super_block *sb, v
+ 	return (error);
+ }
+ 
+-#ifdef HAVE_MOUNT_NODEV
++static int
++zpl_test_super(struct super_block *s, void *data)
++{
++	zfs_sb_t *zsb = s->s_fs_info;
++
++	objset_t *os = data;
++
++	if (zsb == NULL)
++		return (0);
++
++	return (os == zsb->z_os);
++}
++
++static struct super_block *
++zpl_mount_impl(struct file_system_type *fs_type, int flags, zfs_mntopts_t *zmo)
++{
++	struct super_block *s;
++	objset_t *os;
++	int err;
++
++	err = dmu_objset_hold(zmo->z_osname, FTAG, &os);
++	if (err)
++		return (ERR_PTR(-err));
++
++	s = zpl_sget(fs_type, zpl_test_super, set_anon_super, flags, os);
++	dmu_objset_rele(os, FTAG);
++	if (IS_ERR(s))
++		return (ERR_CAST(s));
++
++	if (s->s_root == NULL) {
++		err = zpl_fill_super(s, zmo, flags & SB_SILENT ? 1 : 0);
++		if (err) {
++			deactivate_locked_super(s);
++			return (ERR_PTR(err));
++		}
++		s->s_flags |= SB_ACTIVE;
++	} else if ((flags ^ s->s_flags) & SB_RDONLY) {
++		deactivate_locked_super(s);
++		return (ERR_PTR(-EBUSY));
++	}
++
++	return (s);
++}
++#ifdef HAVE_FST_MOUNT
+ static struct dentry *
+ zpl_mount(struct file_system_type *fs_type, int flags,
+     const char *osname, void *data)
+ {
+ 	zfs_mntopts_t *zmo = zfs_mntopts_alloc();
++	struct super_block *sb;
+ 	int error;
+ 
+ 	error = zpl_parse_options((char *)osname, (char *)data, zmo, B_FALSE);
+@@ -456,8 +500,11 @@ zpl_mount(struct file_system_type *fs_ty
+ 		zfs_mntopts_free(zmo);
+ 		return (ERR_PTR(error));
+ 	}
++	sb = zpl_mount_impl(fs_type, flags, zmo);
++	if (IS_ERR(sb))
++		return (ERR_CAST(sb));
+ 
+-	return (mount_nodev(fs_type, flags, zmo, zpl_fill_super));
++	return (dget(sb->s_root));
+ }
+ #else
+ static int
+@@ -465,6 +512,7 @@ zpl_get_sb(struct file_system_type *fs_t
+     const char *osname, void *data, struct vfsmount *mnt)
+ {
+ 	zfs_mntopts_t *zmo = zfs_mntopts_alloc();
++	struct super_block *sb;
+ 	int error;
+ 
+ 	error = zpl_parse_options((char *)osname, (char *)data, zmo, B_FALSE);
+@@ -472,10 +520,15 @@ zpl_get_sb(struct file_system_type *fs_t
+ 		zfs_mntopts_free(zmo);
+ 		return (error);
+ 	}
++	sb = zpl_mount_impl(fs_type, flags, zmo);
++	if (IS_ERR(sb))
++		return (ERR_CAST(sb));
+ 
+-	return (get_sb_nodev(fs_type, flags, zmo, zpl_fill_super, mnt));
++	(void) simple_set_mnt(mnt, sb);
++
++	return (0);
+ }
+-#endif /* HAVE_MOUNT_NODEV */
++#endif /* HAVE_FST_MOUNT */
+ 
+ static void
+ zpl_kill_sb(struct super_block *sb)
+@@ -542,10 +595,10 @@ const struct super_operations zpl_super_
+ struct file_system_type zpl_fs_type = {
+ 	.owner			= THIS_MODULE,
+ 	.name			= ZFS_DRIVER,
+-#ifdef HAVE_MOUNT_NODEV
++#ifdef HAVE_FST_MOUNT
+ 	.mount			= zpl_mount,
+ #else
+ 	.get_sb			= zpl_get_sb,
+-#endif /* HAVE_MOUNT_NODEV */
++#endif /* HAVE_FST_MOUNT */
+ 	.kill_sb		= zpl_kill_sb,
+ };
+Index: zfs-linux-0.6.5.6/include/linux/vfs_compat.h
+===================================================================
+--- zfs-linux-0.6.5.6.orig/include/linux/vfs_compat.h
++++ zfs-linux-0.6.5.6/include/linux/vfs_compat.h
+@@ -112,6 +112,30 @@ zpl_bdi_setup_and_register(struct backin
+ #endif
+ 
+ /*
++ * 4.14 adds SB_* flag definitions, define them to MS_* equivalents
++ * if not set.
++ */
++#ifndef		SB_RDONLY
++#define		SB_RDONLY	MS_RDONLY
++#endif
++
++#ifndef		SB_SILENT
++#define		SB_SILENT	MS_SILENT
++#endif
++
++#ifndef		SB_ACTIVE
++#define		SB_ACTIVE	MS_ACTIVE
++#endif
++
++#ifndef		SB_POSIXACL
++#define		SB_POSIXACL	MS_POSIXACL
++#endif
++
++#ifndef		SB_MANDLOCK
++#define		SB_MANDLOCK	MS_MANDLOCK
++#endif
++
++/*
+  * 2.6.38 API change,
+  * LOOKUP_RCU flag introduced to distinguish rcu-walk from ref-walk cases.
+  */
