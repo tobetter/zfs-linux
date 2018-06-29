@@ -895,7 +895,8 @@ zpool_do_labelclear(int argc, char **argv)
 	if (zpool_read_label(fd, &config, NULL) != 0 || config == NULL) {
 		(void) fprintf(stderr,
 		    gettext("failed to check state for %s\n"), vdev);
-		return (1);
+		ret = 1;
+		goto errout;
 	}
 	nvlist_free(config);
 
@@ -903,7 +904,8 @@ zpool_do_labelclear(int argc, char **argv)
 	if (ret != 0) {
 		(void) fprintf(stderr,
 		    gettext("failed to check state for %s\n"), vdev);
-		return (1);
+		ret = 1;
+		goto errout;
 	}
 
 	if (!inuse)
@@ -3622,7 +3624,7 @@ print_vdev_stats(zpool_handle_t *zhp, const char *name, nvlist_t *oldnv,
     nvlist_t *newnv, iostat_cbdata_t *cb, int depth)
 {
 	nvlist_t **oldchild, **newchild;
-	uint_t c, children;
+	uint_t c, children, oldchildren;
 	vdev_stat_t *oldvs, *newvs, *calcvs;
 	vdev_stat_t zerovs = { 0 };
 	char *vname;
@@ -3734,9 +3736,13 @@ children:
 	    &newchild, &children) != 0)
 		return (ret);
 
-	if (oldnv && nvlist_lookup_nvlist_array(oldnv, ZPOOL_CONFIG_CHILDREN,
-	    &oldchild, &c) != 0)
-		return (ret);
+	if (oldnv) {
+		if (nvlist_lookup_nvlist_array(oldnv, ZPOOL_CONFIG_CHILDREN,
+		    &oldchild, &oldchildren) != 0)
+			return (ret);
+
+		children = MIN(oldchildren, children);
+	}
 
 	for (c = 0; c < children; c++) {
 		uint64_t ishole = B_FALSE, islog = B_FALSE;
@@ -3792,9 +3798,13 @@ children:
 	    &newchild, &children) != 0)
 		return (ret);
 
-	if (oldnv && nvlist_lookup_nvlist_array(oldnv, ZPOOL_CONFIG_L2CACHE,
-	    &oldchild, &c) != 0)
-		return (ret);
+	if (oldnv) {
+		if (nvlist_lookup_nvlist_array(oldnv, ZPOOL_CONFIG_L2CACHE,
+		    &oldchild, &oldchildren) != 0)
+			return (ret);
+
+		children = MIN(oldchildren, children);
+	}
 
 	if (children > 0) {
 		if ((!(cb->cb_flags & IOS_ANYHISTO_M)) && !cb->cb_scripted &&
@@ -7357,7 +7367,7 @@ typedef struct ev_opts {
 } ev_opts_t;
 
 static void
-zpool_do_events_short(nvlist_t *nvl)
+zpool_do_events_short(nvlist_t *nvl, ev_opts_t *opts)
 {
 	char ctime_str[26], str[32], *ptr;
 	int64_t *tv;
@@ -7370,7 +7380,10 @@ zpool_do_events_short(nvlist_t *nvl)
 	(void) strncpy(str+7, ctime_str+20, 4);		/* '1993' */
 	(void) strncpy(str+12, ctime_str+11, 8);	/* '21:49:08' */
 	(void) sprintf(str+20, ".%09lld", (longlong_t)tv[1]); /* '.123456789' */
-	(void) printf(gettext("%s "), str);
+	if (opts->scripted)
+		(void) printf(gettext("%s\t"), str);
+	else
+		(void) printf(gettext("%s "), str);
 
 	verify(nvlist_lookup_string(nvl, FM_CLASS, &ptr) == 0);
 	(void) printf(gettext("%s\n"), ptr);
@@ -7634,7 +7647,7 @@ zpool_do_events_next(ev_opts_t *opts)
 		if (dropped > 0)
 			(void) printf(gettext("dropped %d events\n"), dropped);
 
-		zpool_do_events_short(nvl);
+		zpool_do_events_short(nvl, opts);
 
 		if (opts->verbose) {
 			zpool_do_events_nvprint(nvl, 8);

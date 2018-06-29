@@ -1,3 +1,12 @@
+zfs-linux (0.7.9-3ubuntu1) cosmic; urgency=medium
+
+  * Sync with Debian 0.7.9-3
+  * Pull in ubuntu sauce patches from bionic ZFS 0.7.5
+  * Pull in bug fixes that are in bionic 0.7.5
+  * Sync deltas between bionic and debian control.in
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 29 Jun 2018 11:35:16 +0100
+
 zfs-linux (0.7.9-3) unstable; urgency=medium
 
   [ Antonio Russo ]
