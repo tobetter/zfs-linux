@@ -2,6 +2,7 @@
 etc/default/zfs
 etc/zfs/zfs-functions
 etc/zfs/zpool.d/
+lib/systemd/system/zfs-load-module.service
 lib/systemd/system-preset/
 lib/systemd/system/zfs-import-cache.service
 lib/systemd/system/zfs-import-scan.service
@@ -12,6 +13,9 @@ lib/systemd/system/zfs.target
 lib/udev/
 sbin/fsck.zfs
 sbin/mount.zfs
+sbin/ztest
+sbin/zinject
+sbin/zpios
 sbin/zdb
 sbin/zfs
 sbin/zhack

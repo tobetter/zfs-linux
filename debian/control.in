@@ -1,7 +1,8 @@
 Source: zfs-linux
 Section: contrib/kernel
 Priority: optional
-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@alioth-lists.debian.net>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@lists.alioth.debian.org>
 Uploaders: Aron Xu <aron@debian.org>,
            Petter Reinholdtsen <pere@debian.org>,
            Carlos Alberto Lopez Perez <clopez@igalia.com>
@@ -101,6 +102,13 @@ Description: OpenZFS filesystem kernel modules for Linux
  This DKMS package includes the SPA, DMU, ZVOL, and ZPL components of
  OpenZFS.
 
+Package: zfs-doc
+Section: contrib/doc
+Architecture: all
+Depends: ${misc:Depends}
+Description: Native OpenZFS filesystem documentation and examples.
+ Shared boilerplate files for OpenZFS on Linux that are not required at runtime.
+
 Package: zfs-initramfs
 Architecture: all
 Depends: busybox-initramfs | busybox-static | busybox,
@@ -152,10 +160,10 @@ Description: command-line tools to manage OpenZFS filesystems
 Package: zfs-zed
 Section: contrib/admin
 Architecture: linux-any
-Depends: zfs-modules | zfs-dkms,
-         zfsutils-linux (>= ${binary:Version}),
+Depends: zfsutils-linux (>= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
+Suggests: zfs-modules | zfs-dkms
 Description: OpenZFS Event Daemon
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data
