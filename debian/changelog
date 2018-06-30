@@ -1,3 +1,10 @@
+zfs-linux (0.7.9-3ubuntu2) cosmic; urgency=medium
+
+  * Remove zinject, ztest, zpios to keep in sync with Debian upstream
+    as these are ZFS debug tools and not required for mainstream zfs work
+
+ -- Colin Ian King <colin.king@canonical.com>  Sat, 30 Jun 2018 17:26:28 +0100
+
 zfs-linux (0.7.9-3ubuntu1) cosmic; urgency=medium
 
   * Sync with Debian 0.7.9-3

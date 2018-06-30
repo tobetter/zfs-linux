@@ -13,9 +13,6 @@ lib/systemd/system/zfs.target
 lib/udev/
 sbin/fsck.zfs
 sbin/mount.zfs
-sbin/ztest
-sbin/zinject
-sbin/zpios
 sbin/zdb
 sbin/zfs
 sbin/zhack
