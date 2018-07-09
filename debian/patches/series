@@ -38,3 +38,5 @@ enable-zed.patch
 2341-Change-movaps-to-movups-in-AES-NI-code.patch
 2342-tx_waited-tx_dirty_delayed-in-trace_dmu.h.patch 
 3100-remove-libzfs-module-timeout.patch
+3200-Linux-compat-4.18-check_disk_size_change.patch
+3201-Linux-4.18-compat-inode-timespec-timespec64.patch
