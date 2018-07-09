@@ -1,3 +1,11 @@
+zfs-linux (0.7.9-3ubuntu3) cosmic; urgency=medium
+
+  * Add backport of upstream 4.18 compat fixes
+    - Linux 4.18 compat: inode timespec -> timespec64
+    - Linux compat 4.18: check_disk_size_change()
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 9 Jul 2018 17:15:49 +0100
+
 zfs-linux (0.7.9-3ubuntu2) cosmic; urgency=medium
 
   * Remove zinject, ztest, zpios to keep in sync with Debian upstream

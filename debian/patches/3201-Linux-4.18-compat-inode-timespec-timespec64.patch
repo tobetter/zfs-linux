@@ -1,0 +1,575 @@
+From 6413c95fbd88dc06ae57e50398b8530a17d0c7d3 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Tue, 19 Jun 2018 21:51:18 -0700
+Subject: [PATCH] Linux 4.18 compat: inode timespec -> timespec64
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Commit torvalds/linux@95582b0 changes the inode i_atime, i_mtime,
+and i_ctime members form timespec's to timespec64's to make them
+2038 safe.  As part of this change the current_time() function was
+also updated to return the timespec64 type.
+
+Resolve this issue by introducing a new inode_timespec_t type which
+is defined to match the timespec type used by the inode.  It should
+be used when working with inode timestamps to ensure matching types.
+
+The timestruc_t type under Illumos was used in a similar fashion but
+was specified to always be a timespec_t.  Rather than incorrectly
+define this type all timespec_t types have been replaced by the new
+inode_timespec_t type.
+
+Finally, the kernel and user space 'sys/time.h' headers were aligned
+with each other.  They define as appropriate for the context several
+constants as macros and include static inline implementation of
+gethrestime(), gethrestime_sec(), and gethrtime().
+
+Reviewed-by: Chunwei Chen <tuxoko@gmail.com>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Closes #7643
+(backport from upstream zfs commit 6413c95fbd88dc06ae57e50398b8530a17d0c7d3)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+
+Index: zfs-linux-0.7.9/config/kernel-current-time.m4
+===================================================================
+--- zfs-linux-0.7.9.orig/config/kernel-current-time.m4
++++ zfs-linux-0.7.9/config/kernel-current-time.m4
+@@ -1,15 +1,14 @@
+ dnl #
+ dnl # 4.9, current_time() added
++dnl # 4.18, return type changed from timespec to timespec64
+ dnl #
+ AC_DEFUN([ZFS_AC_KERNEL_CURRENT_TIME],
+ 	[AC_MSG_CHECKING([whether current_time() exists])
+ 	ZFS_LINUX_TRY_COMPILE_SYMBOL([
+ 		#include <linux/fs.h>
+ 	], [
+-		struct inode ip;
+-		struct timespec now __attribute__ ((unused));
+-
+-		now = current_time(&ip);
++		struct inode ip __attribute__ ((unused));
++		ip.i_atime = current_time(&ip);
+ 	], [current_time], [fs/inode.c], [
+ 		AC_MSG_RESULT(yes)
+ 		AC_DEFINE(HAVE_CURRENT_TIME, 1, [current_time() exists])
+Index: zfs-linux-0.7.9/config/kernel-inode-times.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.9/config/kernel-inode-times.m4
+@@ -0,0 +1,25 @@
++dnl #
++dnl # 4.18 API change
++dnl # i_atime, i_mtime, and i_ctime changed from timespec to timespec64.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_INODE_TIMES], [
++	AC_MSG_CHECKING([whether inode->i_*time's are timespec64])
++	tmp_flags="$EXTRA_KCFLAGS"
++	EXTRA_KCFLAGS="-Werror"
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/fs.h>
++	],[
++		struct inode ip;
++		struct timespec ts;
++
++		memset(&ip, 0, sizeof(ip));
++		ts = ip.i_mtime;
++	],[
++		AC_MSG_RESULT(no)
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_INODE_TIMESPEC64_TIMES, 1,
++		    [inode->i_*time's are timespec64])
++	])
++	EXTRA_KCFLAGS="$tmp_flags"
++])
+Index: zfs-linux-0.7.9/config/kernel.m4
+===================================================================
+--- zfs-linux-0.7.9.orig/config/kernel.m4
++++ zfs-linux-0.7.9/config/kernel.m4
+@@ -60,6 +60,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_POSIX_ACL_CHMOD
+ 	ZFS_AC_KERNEL_POSIX_ACL_EQUIV_MODE_WANTS_UMODE_T
+ 	ZFS_AC_KERNEL_POSIX_ACL_VALID_WITH_NS
++	ZFS_AC_KERNEL_INODE_TIMES
+ 	ZFS_AC_KERNEL_INODE_OPERATIONS_PERMISSION
+ 	ZFS_AC_KERNEL_INODE_OPERATIONS_PERMISSION_WITH_NAMEIDATA
+ 	ZFS_AC_KERNEL_INODE_OPERATIONS_CHECK_ACL
+Index: zfs-linux-0.7.9/include/sys/dmu.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/dmu.h
++++ zfs-linux-0.7.9/include/sys/dmu.h
+@@ -891,7 +891,7 @@ uint64_t dmu_objset_fsid_guid(objset_t *
+ /*
+  * Get the [cm]time for an objset's snapshot dir
+  */
+-timestruc_t dmu_objset_snap_cmtime(objset_t *os);
++inode_timespec_t dmu_objset_snap_cmtime(objset_t *os);
+ 
+ int dmu_objset_is_snapshot(objset_t *os);
+ 
+Index: zfs-linux-0.7.9/include/sys/dmu_objset.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/dmu_objset.h
++++ zfs-linux-0.7.9/include/sys/dmu_objset.h
+@@ -179,7 +179,7 @@ int dmu_objset_find_dp(struct dsl_pool *
+     int func(struct dsl_pool *, struct dsl_dataset *, void *),
+     void *arg, int flags);
+ void dmu_objset_evict_dbufs(objset_t *os);
+-timestruc_t dmu_objset_snap_cmtime(objset_t *os);
++inode_timespec_t dmu_objset_snap_cmtime(objset_t *os);
+ 
+ /* called from dsl */
+ void dmu_objset_sync(objset_t *os, zio_t *zio, dmu_tx_t *tx);
+Index: zfs-linux-0.7.9/include/sys/dsl_dir.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/dsl_dir.h
++++ zfs-linux-0.7.9/include/sys/dsl_dir.h
+@@ -103,7 +103,7 @@ struct dsl_dir {
+ 	/* Protected by dd_lock */
+ 	kmutex_t dd_lock;
+ 	list_t dd_props; /* list of dsl_prop_record_t's */
+-	timestruc_t dd_snap_cmtime; /* last time snapshot namespace changed */
++	inode_timespec_t dd_snap_cmtime; /* last snapshot namespace change */
+ 	uint64_t dd_origin_txg;
+ 
+ 	/* gross estimate of space used by in-flight tx's */
+@@ -159,7 +159,7 @@ boolean_t dsl_dir_is_clone(dsl_dir_t *dd
+ void dsl_dir_new_refreservation(dsl_dir_t *dd, struct dsl_dataset *ds,
+     uint64_t reservation, cred_t *cr, dmu_tx_t *tx);
+ void dsl_dir_snap_cmtime_update(dsl_dir_t *dd);
+-timestruc_t dsl_dir_snap_cmtime(dsl_dir_t *dd);
++inode_timespec_t dsl_dir_snap_cmtime(dsl_dir_t *dd);
+ void dsl_dir_set_reservation_sync_impl(dsl_dir_t *dd, uint64_t value,
+     dmu_tx_t *tx);
+ void dsl_dir_zapify(dsl_dir_t *dd, dmu_tx_t *tx);
+Index: zfs-linux-0.7.9/include/sys/spa_impl.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/spa_impl.h
++++ zfs-linux-0.7.9/include/sys/spa_impl.h
+@@ -153,7 +153,7 @@ struct spa {
+ 	uint64_t	spa_freeze_txg;		/* freeze pool at this txg */
+ 	uint64_t	spa_load_max_txg;	/* best initial ub_txg */
+ 	uint64_t	spa_claim_max_txg;	/* highest claimed birth txg */
+-	timespec_t	spa_loaded_ts;		/* 1st successful open time */
++	inode_timespec_t spa_loaded_ts;		/* 1st successful open time */
+ 	objset_t	*spa_meta_objset;	/* copy of dp->dp_meta_objset */
+ 	kmutex_t	spa_evicting_os_lock;	/* Evicting objset list lock */
+ 	list_t		spa_evicting_os_list;	/* Objsets being evicted. */
+Index: zfs-linux-0.7.9/include/sys/xvattr.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/xvattr.h
++++ zfs-linux-0.7.9/include/sys/xvattr.h
+@@ -47,7 +47,7 @@
+  * Structure of all optional attributes.
+  */
+ typedef struct xoptattr {
+-	timestruc_t	xoa_createtime;	/* Create time of file */
++	inode_timespec_t xoa_createtime;	/* Create time of file */
+ 	uint8_t		xoa_archive;
+ 	uint8_t		xoa_system;
+ 	uint8_t		xoa_readonly;
+Index: zfs-linux-0.7.9/include/sys/zfs_context.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/zfs_context.h
++++ zfs-linux-0.7.9/include/sys/zfs_context.h
+@@ -527,7 +527,7 @@ extern char *vn_dumpdir;
+ #define	AV_SCANSTAMP_SZ	32		/* length of anti-virus scanstamp */
+ 
+ typedef struct xoptattr {
+-	timestruc_t	xoa_createtime;	/* Create time of file */
++	inode_timespec_t xoa_createtime;	/* Create time of file */
+ 	uint8_t		xoa_archive;
+ 	uint8_t		xoa_system;
+ 	uint8_t		xoa_readonly;
+@@ -640,13 +640,6 @@ extern void delay(clock_t ticks);
+ #define	USEC_TO_TICK(usec)	((usec) / (MICROSEC / hz))
+ #define	NSEC_TO_TICK(usec)	((usec) / (NANOSEC / hz))
+ 
+-#define	gethrestime_sec() time(NULL)
+-#define	gethrestime(t) \
+-	do {\
+-		(t)->tv_sec = gethrestime_sec();\
+-		(t)->tv_nsec = 0;\
+-	} while (0);
+-
+ #define	max_ncpus	64
+ #define	boot_ncpus	(sysconf(_SC_NPROCESSORS_ONLN))
+ 
+Index: zfs-linux-0.7.9/include/sys/zfs_znode.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/zfs_znode.h
++++ zfs-linux-0.7.9/include/sys/zfs_znode.h
+@@ -270,19 +270,36 @@ typedef struct znode_hold {
+ 
+ extern unsigned int zfs_object_mutex_size;
+ 
+-/* Encode ZFS stored time values from a struct timespec */
++/*
++ * Encode ZFS stored time values from a struct timespec / struct timespec64.
++ */
+ #define	ZFS_TIME_ENCODE(tp, stmp)		\
+-{						\
++do {						\
+ 	(stmp)[0] = (uint64_t)(tp)->tv_sec;	\
+ 	(stmp)[1] = (uint64_t)(tp)->tv_nsec;	\
+-}
++} while (0)
+ 
+-/* Decode ZFS stored time values to a struct timespec */
++#if defined(HAVE_INODE_TIMESPEC64_TIMES)
++/*
++ * Decode ZFS stored time values to a struct timespec64
++ * 4.18 and newer kernels.
++ */
++#define	ZFS_TIME_DECODE(tp, stmp)		\
++do {						\
++	(tp)->tv_sec = (time64_t)(stmp)[0];	\
++	(tp)->tv_nsec = (long)(stmp)[1];	\
++} while (0)
++#else
++/*
++ * Decode ZFS stored time values to a struct timespec
++ * 4.17 and older kernels.
++ */
+ #define	ZFS_TIME_DECODE(tp, stmp)		\
+-{						\
+-	(tp)->tv_sec = (time_t)(stmp)[0];		\
+-	(tp)->tv_nsec = (long)(stmp)[1];		\
+-}
++do {						\
++	(tp)->tv_sec = (time_t)(stmp)[0];	\
++	(tp)->tv_nsec = (long)(stmp)[1];	\
++} while (0)
++#endif /* HAVE_INODE_TIMESPEC64_TIMES */
+ 
+ /*
+  * Timestamp defines
+Index: zfs-linux-0.7.9/include/sys/zpl.h
+===================================================================
+--- zfs-linux-0.7.9.orig/include/sys/zpl.h
++++ zfs-linux-0.7.9/include/sys/zpl.h
+@@ -189,4 +189,13 @@ zpl_dir_emit_dots(struct file *file, zpl
+ }
+ #endif /* HAVE_VFS_ITERATE */
+ 
++/*
++ * Linux 4.18, inode times converted from timespec to timespec64.
++ */
++#if defined(HAVE_INODE_TIMESPEC64_TIMES)
++#define	zpl_inode_timespec_trunc(ts, gran)	timespec64_trunc(ts, gran)
++#else
++#define	zpl_inode_timespec_trunc(ts, gran)	timespec_trunc(ts, gran)
++#endif
++
+ #endif	/* _SYS_ZPL_H */
+Index: zfs-linux-0.7.9/lib/libspl/Makefile.am
+===================================================================
+--- zfs-linux-0.7.9.orig/lib/libspl/Makefile.am
++++ zfs-linux-0.7.9/lib/libspl/Makefile.am
+@@ -19,8 +19,6 @@ noinst_LTLIBRARIES = libspl.la
+ 
+ USER_C = \
+ 	getexecname.c \
+-	gethrtime.c \
+-	gethrestime.c \
+ 	getmntany.c \
+ 	list.c \
+ 	mkdirp.c \
+Index: zfs-linux-0.7.9/lib/libspl/gethrestime.c
+===================================================================
+--- zfs-linux-0.7.9.orig/lib/libspl/gethrestime.c
++++ /dev/null
+@@ -1,38 +0,0 @@
+-/*
+- * CDDL HEADER START
+- *
+- * The contents of this file are subject to the terms of the
+- * Common Development and Distribution License (the "License").
+- * You may not use this file except in compliance with the License.
+- *
+- * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+- * or http://www.opensolaris.org/os/licensing.
+- * See the License for the specific language governing permissions
+- * and limitations under the License.
+- *
+- * When distributing Covered Code, include this CDDL HEADER in each
+- * file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+- * If applicable, add the following below this CDDL HEADER, with the
+- * fields enclosed by brackets "[]" replaced with your own identifying
+- * information: Portions Copyright [yyyy] [name of copyright owner]
+- *
+- * CDDL HEADER END
+- */
+-
+-/*
+- * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+- * Use is subject to license terms.
+- */
+-
+-#include <time.h>
+-#include <sys/time.h>
+-
+-void
+-gethrestime(timestruc_t *ts)
+-{
+-	struct timeval tv;
+-
+-	gettimeofday(&tv, NULL);
+-	ts->tv_sec = tv.tv_sec;
+-	ts->tv_nsec = tv.tv_usec * NSEC_PER_USEC;
+-}
+Index: zfs-linux-0.7.9/lib/libspl/gethrtime.c
+===================================================================
+--- zfs-linux-0.7.9.orig/lib/libspl/gethrtime.c
++++ /dev/null
+@@ -1,45 +0,0 @@
+-/*
+- * CDDL HEADER START
+- *
+- * The contents of this file are subject to the terms of the
+- * Common Development and Distribution License (the "License").
+- * You may not use this file except in compliance with the License.
+- *
+- * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+- * or http://www.opensolaris.org/os/licensing.
+- * See the License for the specific language governing permissions
+- * and limitations under the License.
+- *
+- * When distributing Covered Code, include this CDDL HEADER in each
+- * file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+- * If applicable, add the following below this CDDL HEADER, with the
+- * fields enclosed by brackets "[]" replaced with your own identifying
+- * information: Portions Copyright [yyyy] [name of copyright owner]
+- *
+- * CDDL HEADER END
+- */
+-
+-/*
+- * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+- * Use is subject to license terms.
+- */
+-
+-#include <time.h>
+-#include <sys/time.h>
+-#include <stdlib.h>
+-#include <stdio.h>
+-
+-hrtime_t
+-gethrtime(void)
+-{
+-	struct timespec ts;
+-	int rc;
+-
+-	rc = clock_gettime(CLOCK_MONOTONIC, &ts);
+-	if (rc) {
+-		fprintf(stderr, "Error: clock_gettime() = %d\n", rc);
+-		abort();
+-	}
+-
+-	return ((((u_int64_t)ts.tv_sec) * NANOSEC) + ts.tv_nsec);
+-}
+Index: zfs-linux-0.7.9/lib/libspl/include/sys/time.h
+===================================================================
+--- zfs-linux-0.7.9.orig/lib/libspl/include/sys/time.h
++++ zfs-linux-0.7.9/lib/libspl/include/sys/time.h
+@@ -27,8 +27,9 @@
+ #ifndef _LIBSPL_SYS_TIME_H
+ #define	_LIBSPL_SYS_TIME_H
+ 
+-#include_next <sys/time.h>
++#include <time.h>
+ #include <sys/types.h>
++#include_next <sys/time.h>
+ 
+ #ifndef SEC
+ #define	SEC		1
+@@ -70,13 +71,33 @@
+ #define	SEC2NSEC(m)	((hrtime_t)(m) * (NANOSEC / SEC))
+ #endif
+ 
+-
+ typedef	long long		hrtime_t;
+-typedef	struct	timespec	timestruc_t;
+-typedef	struct	timespec	timespec_t;
+-
++typedef	struct timespec		timespec_t;
++typedef struct timespec		inode_timespec_t;
+ 
+-extern hrtime_t gethrtime(void);
+-extern void gethrestime(timestruc_t *);
++static inline void
++gethrestime(inode_timespec_t *ts)
++{
++	struct timeval tv;
++	(void) gettimeofday(&tv, NULL);
++	ts->tv_sec = tv.tv_sec;
++	ts->tv_nsec = tv.tv_usec * NSEC_PER_USEC;
++}
++
++static inline time_t
++gethrestime_sec(void)
++{
++	struct timeval tv;
++	(void) gettimeofday(&tv, NULL);
++	return (tv.tv_sec);
++}
++
++static inline hrtime_t
++gethrtime(void)
++{
++	struct timespec ts;
++	(void) clock_gettime(CLOCK_MONOTONIC, &ts);
++	return ((((u_int64_t)ts.tv_sec) * NANOSEC) + ts.tv_nsec);
++}
+ 
+ #endif /* _LIBSPL_SYS_TIME_H */
+Index: zfs-linux-0.7.9/lib/libzpool/kernel.c
+===================================================================
+--- zfs-linux-0.7.9.orig/lib/libzpool/kernel.c
++++ zfs-linux-0.7.9/lib/libzpool/kernel.c
+@@ -498,7 +498,7 @@ cv_timedwait(kcondvar_t *cv, kmutex_t *m
+ {
+ 	int error;
+ 	struct timeval tv;
+-	timestruc_t ts;
++	struct timespec ts;
+ 	clock_t delta;
+ 
+ 	ASSERT3U(cv->cv_magic, ==, CV_MAGIC);
+@@ -536,7 +536,7 @@ cv_timedwait_hires(kcondvar_t *cv, kmute
+ {
+ 	int error;
+ 	struct timeval tv;
+-	timestruc_t ts;
++	struct timespec ts;
+ 	hrtime_t delta;
+ 
+ 	ASSERT(flag == 0 || flag == CALLOUT_FLAG_ABSOLUTE);
+Index: zfs-linux-0.7.9/module/zfs/dmu_objset.c
+===================================================================
+--- zfs-linux-0.7.9.orig/module/zfs/dmu_objset.c
++++ zfs-linux-0.7.9/module/zfs/dmu_objset.c
+@@ -860,7 +860,7 @@ dmu_objset_evict_done(objset_t *os)
+ 	kmem_free(os, sizeof (objset_t));
+ }
+ 
+-timestruc_t
++inode_timespec_t
+ dmu_objset_snap_cmtime(objset_t *os)
+ {
+ 	return (dsl_dir_snap_cmtime(os->os_dsl_dataset->ds_dir));
+Index: zfs-linux-0.7.9/module/zfs/dsl_dir.c
+===================================================================
+--- zfs-linux-0.7.9.orig/module/zfs/dsl_dir.c
++++ zfs-linux-0.7.9/module/zfs/dsl_dir.c
+@@ -1975,10 +1975,10 @@ dsl_dir_transfer_possible(dsl_dir_t *sdd
+ 	return (0);
+ }
+ 
+-timestruc_t
++inode_timespec_t
+ dsl_dir_snap_cmtime(dsl_dir_t *dd)
+ {
+-	timestruc_t t;
++	inode_timespec_t t;
+ 
+ 	mutex_enter(&dd->dd_lock);
+ 	t = dd->dd_snap_cmtime;
+@@ -1990,7 +1990,7 @@ dsl_dir_snap_cmtime(dsl_dir_t *dd)
+ void
+ dsl_dir_snap_cmtime_update(dsl_dir_t *dd)
+ {
+-	timestruc_t t;
++	inode_timespec_t t;
+ 
+ 	gethrestime(&t);
+ 	mutex_enter(&dd->dd_lock);
+Index: zfs-linux-0.7.9/module/zfs/fm.c
+===================================================================
+--- zfs-linux-0.7.9.orig/module/zfs/fm.c
++++ zfs-linux-0.7.9/module/zfs/fm.c
+@@ -508,8 +508,8 @@ zfs_zevent_insert(zevent_t *ev)
+ int
+ zfs_zevent_post(nvlist_t *nvl, nvlist_t *detector, zevent_cb_t *cb)
+ {
++	inode_timespec_t tv;
+ 	int64_t tv_array[2];
+-	timestruc_t tv;
+ 	uint64_t eid;
+ 	size_t nvl_size = 0;
+ 	zevent_t *ev;
+Index: zfs-linux-0.7.9/module/zfs/zfs_ctldir.c
+===================================================================
+--- zfs-linux-0.7.9.orig/module/zfs/zfs_ctldir.c
++++ zfs-linux-0.7.9/module/zfs/zfs_ctldir.c
+@@ -451,7 +451,7 @@ static struct inode *
+ zfsctl_inode_alloc(zfsvfs_t *zfsvfs, uint64_t id,
+     const struct file_operations *fops, const struct inode_operations *ops)
+ {
+-	struct timespec now;
++	inode_timespec_t now;
+ 	struct inode *ip;
+ 	znode_t *zp;
+ 
+Index: zfs-linux-0.7.9/module/zfs/zfs_vnops.c
+===================================================================
+--- zfs-linux-0.7.9.orig/module/zfs/zfs_vnops.c
++++ zfs-linux-0.7.9/module/zfs/zfs_vnops.c
+@@ -3158,7 +3158,7 @@ top:
+ 
+ 	if (mask & (ATTR_MTIME | ATTR_SIZE)) {
+ 		ZFS_TIME_ENCODE(&vap->va_mtime, mtime);
+-		ZTOI(zp)->i_mtime = timespec_trunc(vap->va_mtime,
++		ZTOI(zp)->i_mtime = zpl_inode_timespec_trunc(vap->va_mtime,
+ 		    ZTOI(zp)->i_sb->s_time_gran);
+ 
+ 		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs), NULL,
+@@ -3167,7 +3167,7 @@ top:
+ 
+ 	if (mask & (ATTR_CTIME | ATTR_SIZE)) {
+ 		ZFS_TIME_ENCODE(&vap->va_ctime, ctime);
+-		ZTOI(zp)->i_ctime = timespec_trunc(vap->va_ctime,
++		ZTOI(zp)->i_ctime = zpl_inode_timespec_trunc(vap->va_ctime,
+ 		    ZTOI(zp)->i_sb->s_time_gran);
+ 		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
+ 		    ctime, sizeof (ctime));
+Index: zfs-linux-0.7.9/module/zfs/zfs_znode.c
+===================================================================
+--- zfs-linux-0.7.9.orig/module/zfs/zfs_znode.c
++++ zfs-linux-0.7.9/module/zfs/zfs_znode.c
+@@ -700,7 +700,7 @@ zfs_mknode(znode_t *dzp, vattr_t *vap, d
+ 	uint64_t	rdev = 0;
+ 	zfsvfs_t	*zfsvfs = ZTOZSB(dzp);
+ 	dmu_buf_t	*db;
+-	timestruc_t	now;
++	inode_timespec_t now;
+ 	uint64_t	gen, obj;
+ 	int		bonuslen;
+ 	int		dnodesize;
+@@ -1349,7 +1349,7 @@ void
+ zfs_tstamp_update_setup(znode_t *zp, uint_t flag, uint64_t mtime[2],
+     uint64_t ctime[2])
+ {
+-	timestruc_t	now;
++	inode_timespec_t now;
+ 
+ 	gethrestime(&now);
+ 
+Index: zfs-linux-0.7.9/module/zfs/zpl_inode.c
+===================================================================
+--- zfs-linux-0.7.9.orig/module/zfs/zpl_inode.c
++++ zfs-linux-0.7.9/module/zfs/zpl_inode.c
+@@ -384,9 +384,10 @@ zpl_setattr(struct dentry *dentry, struc
+ 	vap->va_mtime = ia->ia_mtime;
+ 	vap->va_ctime = ia->ia_ctime;
+ 
+-	if (vap->va_mask & ATTR_ATIME)
+-		ip->i_atime = timespec_trunc(ia->ia_atime,
++	if (vap->va_mask & ATTR_ATIME) {
++		ip->i_atime = zpl_inode_timespec_trunc(ia->ia_atime,
+ 		    ip->i_sb->s_time_gran);
++	}
+ 
+ 	cookie = spl_fstrans_mark();
+ 	error = -zfs_setattr(ip, vap, 0, cr);
