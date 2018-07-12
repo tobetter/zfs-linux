@@ -1,3 +1,11 @@
+zfs-linux (0.6.5.6-0ubuntu25) xenial; urgency=medium
+
+  * Fix zpl_mount() deadlock (LP: #1781364)
+    - Upstream ZFS fix ac09630d8b0b ("Fix zpl_mount() deadlock")
+      fixes deadlock on multiple parallelized mount/umounts
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 12 Jul 2018 09:18:24 +0100
+
 zfs-linux (0.6.5.6-0ubuntu24) xenial; urgency=medium
 
   * Allow multiple mounts of zfs datasets (LP: #1759848)
