@@ -28,3 +28,4 @@ enable-zed.patch
 2202-compat-0.7.0-BLKZNAME.patch
 2203-Allow-mounting-datasets-more-than-once.patch
 3100-remove-libzfs-module-timeout.patch
+3202-Fix-zpl_mount-deadlock.patch
