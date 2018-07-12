@@ -66,3 +66,4 @@ enable-zed.patch
 2348-Fix-zdb-E-segfault.patch
 2349-Fix-zdb-ed-on-objset-for-exported-pool.patch
 3100-remove-libzfs-module-timeout.patch
+3202-Fix-zpl_mount-deadlock.patch

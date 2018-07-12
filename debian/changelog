@@ -1,3 +1,11 @@
+zfs-linux (0.7.5-1ubuntu16.3) bionic; urgency=medium
+
+  * Fix zpl_mount() deadlock (LP: #1781364)
+    - Upstream ZFS fix ac09630d8b0b ("Fix zpl_mount() deadlock")
+      fixes deadlock on multiple parallelized mount/umounts
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 12 Jul 2018 09:18:24 +0100
+
 zfs-linux (0.7.5-1ubuntu16.2) bionic; urgency=medium
 
   * Revert previous fix, re-work by checking for
