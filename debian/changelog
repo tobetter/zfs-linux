@@ -1,3 +1,10 @@
+zfs-linux (0.7.9-3ubuntu5) cosmic; urgency=medium
+
+  * zfsutils-linux: Only Suggest zfs-modules on 32-bit platforms to avoid
+    yanking zfs-dkms into main due to platforms that don't build modules.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Thu, 26 Jul 2018 05:17:55 -0600
+
 zfs-linux (0.7.9-3ubuntu4) cosmic; urgency=medium
 
   * Fix zpl_mount() deadlock (LP: #1781364)
