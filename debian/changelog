@@ -1,3 +1,12 @@
+zfs-linux (0.7.9-3ubuntu6) cosmic; urgency=medium
+
+  * Fix error exit when using -t option (LP: #1769937)
+    - Upstream ZFS fix 4ceb8dd6fdfd ("Fix 'zpool create -t <tempname>'")
+      fixes error message and error exit when using the -t option
+      when creating a pool.
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 12 Sep 2018 10:31:47 +0100
+
 zfs-linux (0.7.9-3ubuntu5) cosmic; urgency=medium
 
   * zfsutils-linux: Only Suggest zfs-modules on 32-bit platforms to avoid
