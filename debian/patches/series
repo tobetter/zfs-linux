@@ -41,3 +41,4 @@ enable-zed.patch
 3200-Linux-compat-4.18-check_disk_size_change.patch
 3201-Linux-4.18-compat-inode-timespec-timespec64.patch
 3202-Fix-zpl_mount-deadlock.patch
+3203-Fix-zpool-create-t-tempname.patch
