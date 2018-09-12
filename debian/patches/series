@@ -67,3 +67,4 @@ enable-zed.patch
 2349-Fix-zdb-ed-on-objset-for-exported-pool.patch
 3100-remove-libzfs-module-timeout.patch
 3202-Fix-zpl_mount-deadlock.patch
+3203-Fix-zpool-create-t-tempname.patch
