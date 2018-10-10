@@ -1,3 +1,12 @@
+zfs-linux (0.6.5.6-0ubuntu26) xenial; urgency=medium
+
+  * Fix error exit when using -t option (LP: #1769937)
+    - Upstream ZFS fix 4ceb8dd6fdfd ("Fix 'zpool create -t <tempname>'")
+      fixes error message and error exit when using the -t option
+      when creating a pool.
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 10 Oct 2018 12:16:47 +0100
+
 zfs-linux (0.6.5.6-0ubuntu25) xenial; urgency=medium
 
   * Fix zpl_mount() deadlock (LP: #1781364)
