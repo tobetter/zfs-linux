@@ -1,0 +1,66 @@
+From 4ceb8dd6fdfdde3b6ac55cf52132858973fce9d0 Mon Sep 17 00:00:00 2001
+From: LOLi <loli10K@users.noreply.github.com>
+Date: Tue, 8 May 2018 06:11:59 +0200
+Subject: [PATCH] Fix 'zpool create -t <tempname>'
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Creating a pool with a temporary name fails when we also specify custom
+dataset properties: this is because we mistakenly call
+zfs_set_prop_nvlist() on the "real" pool name which, as expected,
+cannot be found because the SPA is present in the namespace with the
+temporary name.
+
+Fix this by specifying the correct pool name when setting the dataset
+properties.
+
+Reviewed-by: Prakash Surya <prakash.surya@delphix.com>
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: loli10K <ezomori.nozomu@gmail.com>
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+Closes #7502
+Closes #7509
+
+Index: zfs-linux-0.6.5.6/module/zfs/zfs_ioctl.c
+===================================================================
+--- zfs-linux-0.6.5.6.orig/module/zfs/zfs_ioctl.c
++++ zfs-linux-0.6.5.6/module/zfs/zfs_ioctl.c
+@@ -1438,6 +1438,7 @@ zfs_ioc_pool_create(zfs_cmd_t *zc)
+ 	nvlist_t *config, *props = NULL;
+ 	nvlist_t *rootprops = NULL;
+ 	nvlist_t *zplprops = NULL;
++	char *spa_name = zc->zc_name;
+ 
+ 	if ((error = get_nvlist(zc->zc_nvlist_conf, zc->zc_nvlist_conf_size,
+ 	    zc->zc_iflags, &config)))
+@@ -1453,6 +1454,7 @@ zfs_ioc_pool_create(zfs_cmd_t *zc)
+ 	if (props) {
+ 		nvlist_t *nvl = NULL;
+ 		uint64_t version = SPA_VERSION;
++		char *tname;
+ 
+ 		(void) nvlist_lookup_uint64(props,
+ 		    zpool_prop_to_name(ZPOOL_PROP_VERSION), &version);
+@@ -1475,6 +1477,10 @@ zfs_ioc_pool_create(zfs_cmd_t *zc)
+ 		    zplprops, NULL);
+ 		if (error != 0)
+ 			goto pool_props_bad;
++
++		if (nvlist_lookup_string(props,
++		    zpool_prop_to_name(ZPOOL_PROP_TNAME), &tname) == 0)
++			spa_name = tname;
+ 	}
+ 
+ 	error = spa_create(zc->zc_name, config, props, zplprops);
+@@ -1482,9 +1488,9 @@ zfs_ioc_pool_create(zfs_cmd_t *zc)
+ 	/*
+ 	 * Set the remaining root properties
+ 	 */
+-	if (!error && (error = zfs_set_prop_nvlist(zc->zc_name,
++	if (!error && (error = zfs_set_prop_nvlist(spa_name,
+ 	    ZPROP_SRC_LOCAL, rootprops, NULL)) != 0)
+-		(void) spa_destroy(zc->zc_name);
++		(void) spa_destroy(spa_name);
+ 
+ pool_props_bad:
+ 	nvlist_free(rootprops);
