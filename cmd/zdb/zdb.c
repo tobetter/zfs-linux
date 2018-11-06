@@ -1982,13 +1982,13 @@ dump_object(objset_t *os, uint64_t object, int verbosity, int *print_header,
 	aux[0] = '\0';
 
 	if (doi.doi_checksum != ZIO_CHECKSUM_INHERIT || verbosity >= 6) {
-		(void) snprintf(aux + strlen(aux), sizeof (aux), " (K=%s)",
-		    ZDB_CHECKSUM_NAME(doi.doi_checksum));
+		(void) snprintf(aux + strlen(aux), sizeof (aux) - strlen(aux),
+		    " (K=%s)", ZDB_CHECKSUM_NAME(doi.doi_checksum));
 	}
 
 	if (doi.doi_compress != ZIO_COMPRESS_INHERIT || verbosity >= 6) {
-		(void) snprintf(aux + strlen(aux), sizeof (aux), " (Z=%s)",
-		    ZDB_COMPRESS_NAME(doi.doi_compress));
+		(void) snprintf(aux + strlen(aux), sizeof (aux) - strlen(aux),
+		    " (Z=%s)", ZDB_COMPRESS_NAME(doi.doi_compress));
 	}
 
 	(void) printf("%10lld  %3u  %5s  %5s  %5s  %6s  %5s  %6s  %s%s\n",
@@ -4463,12 +4463,22 @@ main(int argc, char **argv)
 			}
 		} else {
 			error = open_objset(target, DMU_OST_ANY, FTAG, &os);
+			if (error == 0)
+				spa = dmu_objset_spa(os);
 		}
 	}
 	nvlist_free(policy);
 
 	if (error)
 		fatal("can't open '%s': %s", target, strerror(error));
+
+	/*
+	 * Set the pool failure mode to panic in order to prevent the pool
+	 * from suspending.  A suspended I/O will have no way to resume and
+	 * can prevent the zdb(8) command from terminating as expected.
+	 */
+	if (spa != NULL)
+		spa->spa_failmode = ZIO_FAILURE_MODE_PANIC;
 
 	argv++;
 	argc--;
