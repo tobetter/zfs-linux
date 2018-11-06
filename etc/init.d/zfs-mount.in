@@ -1,4 +1,4 @@
-#!@SHELL@
+#!/bin/sh
 #
 # zfs-mount     This script will mount/umount the zfs filesystems.
 #
@@ -199,8 +199,6 @@ do_stop()
 
 # ----------------------------------------------------
 
-if [ ! -e /sbin/openrc-run ]
-then
 	case "$1" in
 		start)
 			do_start
@@ -219,9 +217,3 @@ then
 	esac
 
 	exit $?
-else
-	# Create wrapper functions since Gentoo don't use the case part.
-	depend() { do_depend; }
-	start() { do_start; }
-	stop() { do_stop; }
-fi
