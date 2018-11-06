@@ -1,3 +1,13 @@
+zfs-linux (0.7.11-3ubuntu1) disco; urgency=medium
+
+  * Sync with Debian 0.7.11-3
+  * Pull in ubuntu sauce patches from bionic ZFS 0.7.9
+  * Sync deltas between disco and debian control.in
+  * Add in compat fixes:
+    - Linux 4.19-rc3+ compat: Remove refcount_t compat
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 6 Nov 2018 13:06:22 +0000
+
 zfs-linux (0.7.11-3) unstable; urgency=medium
 
   [ Antonio Russo ]
