@@ -1,3 +1,9 @@
+zfs-linux (0.7.11-3ubuntu3) disco; urgency=medium
+
+  * debian/control: Only build zfs-dracut and zfs-initramfs on 64-bit arches.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Mon, 12 Nov 2018 16:39:23 -0700
+
 zfs-linux (0.7.11-3ubuntu2) disco; urgency=medium
 
   * debian/control: Perpetuate the slight fib about zfs-modules dependencies
