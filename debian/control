@@ -122,9 +122,10 @@ Package: zfs-initramfs
 Architecture: all
 Depends: busybox-initramfs | busybox-static | busybox,
          initramfs-tools,
-         zfs-modules | zfs-dkms,
+         zfs-modules [amd64 arm64 ppc64el s390x] | zfs-dkms [amd64 arm64 ppc64el s390x],
          zfsutils-linux (>= ${binary:Version}),
          ${misc:Depends}
+Suggests: zfs-modules [armhf i386] | zfs-dkms [armhf i386]
 Description: OpenZFS root filesystem capabilities for Linux - initramfs
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data
@@ -136,9 +137,10 @@ Description: OpenZFS root filesystem capabilities for Linux - initramfs
 Package: zfs-dracut
 Architecture: all
 Depends: dracut,
-         zfs-modules | zfs-dkms,
+         zfs-modules [amd64 arm64 ppc64el s390x] | zfs-dkms [amd64 arm64 ppc64el s390x],
          zfsutils-linux (>= ${binary:Version}),
          ${misc:Depends}
+Suggests: zfs-modules [armhf i386] | zfs-dkms [armhf i386]
 Description: OpenZFS root filesystem capabilities for Linux - dracut
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data
