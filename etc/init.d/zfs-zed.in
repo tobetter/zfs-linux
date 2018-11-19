@@ -8,8 +8,8 @@
 #
 ### BEGIN INIT INFO
 # Provides:          zfs-zed
-# Required-Start:    $local_fs zfs-mount
-# Required-Stop:     $local_fs zfs-mount
+# Required-Start:    zfs-mount
+# Required-Stop:     zfs-mount
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # X-Stop-After:      zfs-share
