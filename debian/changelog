@@ -1,3 +1,25 @@
+zfs-linux (0.7.12-1ubuntu1) disco; urgency=medium
+
+  [ Adam Conrad ]
+  * debian/control: Only build zfs-dracut and zfs-initramfs on 64-bit arches.
+  * debian/control: Perpetuate the slight fib about zfs-modules dependencies
+    to zfs-dracut and zfs-initramfs, now that the latter is heading to main.
+
+  [ Colin Ian King ]
+  * Sync with Debian 0.7.12-3
+  * Pull in ubuntu sauce patches from bionic ZFS 0.7.11
+  * Sync deltas between disco and debian control.in
+  * Remove init related debian patches:
+    - init-debian-openrc-workaround.patch
+    - init-start-stop-dep-on-local-fs.patch
+  * Remove init based symlinks:
+    - fsutils-linux.zfs-import.init
+    - zfsutils-linux.zfs-mount.init
+    - zfsutils-linux.zfs-share.init
+    - zfs-zed.zfs-zed.init 
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 21 Nov 2018 10:18:19 +0000
+
 zfs-linux (0.7.12-1) unstable; urgency=medium
 
   [ Stoiko Ivanov ]

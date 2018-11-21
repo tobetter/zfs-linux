@@ -1,7 +1,8 @@
 Source: zfs-linux
 Section: contrib/kernel
 Priority: optional
-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@alioth-lists.debian.net>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@alioth-lists.debian.net>
 Uploaders: Aron Xu <aron@debian.org>,
            Petter Reinholdtsen <pere@debian.org>,
            Carlos Alberto Lopez Perez <clopez@igalia.com>,
@@ -100,7 +101,7 @@ Architecture: all
 Pre-Depends: spl-dkms (<<${source:Upstream-Version}.),
              spl-dkms (>= ${source:Upstream-Version})
 Depends: dkms (>> 2.1.1.2-5), lsb-release, ${misc:Depends}
-Recommends: zfs-zed, zfsutils-linux (>= ${binary:Version}), linux-libc-dev (<< 4.20~)
+Recommends: zfs-zed, zfsutils-linux (>= ${binary:Version}), linux-libc-dev (<< 4.19~)
 Provides: zfs-modules
 Description: OpenZFS filesystem kernel modules for Linux
  The Z file system is a pooled filesystem designed for maximum data
@@ -110,15 +111,20 @@ Description: OpenZFS filesystem kernel modules for Linux
  This DKMS package includes the SPA, DMU, ZVOL, and ZPL components of
  OpenZFS.
 
-Package: zfs-initramfs
+Package: zfs-doc
+Section: contrib/doc
 Architecture: all
+Depends: ${misc:Depends}
+Description: Native OpenZFS filesystem documentation and examples.
+ Shared boilerplate files for OpenZFS on Linux that are not required at runtime.
+
+Package: zfs-initramfs
+Architecture: amd64 arm64 ppc64el s390x
 Depends: busybox-initramfs | busybox-static | busybox,
          initramfs-tools,
          zfs-modules | zfs-dkms,
          zfsutils-linux (>= ${binary:Version}),
          ${misc:Depends}
-Breaks: zfsutils-linux (<= 0.7.11-2)
-Replaces: zfsutils-linux (<= 0.7.11-2)
 Description: OpenZFS root filesystem capabilities for Linux - initramfs
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data
@@ -128,7 +134,7 @@ Description: OpenZFS root filesystem capabilities for Linux - initramfs
  for the initramfs-tools infrastructure.
 
 Package: zfs-dracut
-Architecture: all
+Architecture: amd64 arm64 ppc64el s390x
 Depends: dracut,
          zfs-modules | zfs-dkms,
          zfsutils-linux (>= ${binary:Version}),
@@ -145,10 +151,11 @@ Package: zfsutils-linux
 Section: contrib/admin
 Architecture: linux-any
 Depends: python3, ${misc:Depends}, ${python3:Depends}, ${shlibs:Depends}
-Recommends: lsb-base, zfs-modules | zfs-dkms, zfs-zed
+Recommends: lsb-base, zfs-modules [amd64 arm64 ppc64el s390x] | zfs-dkms [amd64 arm64 ppc64el s390x], zfs-zed
 Breaks: zfs-dkms (<< ${binary:Version}), zfs-dkms (>> ${binary:Version})
 Suggests: nfs-kernel-server,
           samba-common-bin (>= 3.0.23),
+          zfs-modules [armhf i386] | zfs-dkms [armhf i386],
           zfs-initramfs | zfs-dracut
 Conflicts: zfs, zfs-fuse
 Provides: zfsutils
@@ -163,10 +170,10 @@ Description: command-line tools to manage OpenZFS filesystems
 Package: zfs-zed
 Section: contrib/admin
 Architecture: linux-any
-Depends: zfs-modules | zfs-dkms,
-         zfsutils-linux (>= ${binary:Version}),
+Depends: zfsutils-linux (>= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
+Suggests: zfs-modules | zfs-dkms
 Description: OpenZFS Event Daemon
  The Z file system is a pooled filesystem designed for maximum data
  integrity, supporting data snapshots, multiple copies, and data
