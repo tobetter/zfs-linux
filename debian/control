@@ -155,7 +155,7 @@ Recommends: lsb-base, zfs-modules [amd64 arm64 ppc64el s390x] | zfs-dkms [amd64 
 Breaks: zfs-dkms (<< ${binary:Version}), zfs-dkms (>> ${binary:Version})
 Suggests: nfs-kernel-server,
           samba-common-bin (>= 3.0.23),
-          zfs-modules [armhf i386] | zfs-dkms [armhf i386],
+          zfs-modules | zfs-dkms,
           zfs-initramfs | zfs-dracut
 Conflicts: zfs, zfs-fuse
 Provides: zfsutils

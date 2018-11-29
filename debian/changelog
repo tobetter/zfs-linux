@@ -1,3 +1,13 @@
+zfs-linux (0.7.12-1ubuntu2) disco; urgency=medium
+
+  [ Colin Ian King ]
+  * debian/control: remove armhf i386 suggests on zfs-modules and
+    zfs-dkms for zfsutils-linux
+  * debian/tests/control: only run tests for amd64, arm64, ppc64el and
+    s390x (LP: #1805627)
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 29 Nov 2018 15:55:12 +0000
+
 zfs-linux (0.7.12-1ubuntu1) disco; urgency=medium
 
   [ Adam Conrad ]
