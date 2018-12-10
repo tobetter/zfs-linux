@@ -36,3 +36,4 @@ enable-zed.patch
 2341-Change-movaps-to-movups-in-AES-NI-code.patch
 3100-remove-libzfs-module-timeout.patch
 3203-Fix-zpool-create-t-tempname.patch
+3204-Add-4.20-timespec-compat-fix.patch
