@@ -184,7 +184,11 @@ zpios_timespec_now(void)
 	inode_timespec_t ts_now;
 
 #if defined(HAVE_INODE_TIMESPEC64_TIMES)
+#if defined(HAVE_KTIME_GET_COARSE_REAL_TS64)
+	ktime_get_coarse_real_ts64(&ts_now);
+#else
 	ts_now = current_kernel_time64();
+#endif
 #else
 	ts_now = current_kernel_time();
 #endif
