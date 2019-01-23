@@ -5,9 +5,13 @@ GPL-only bio_associate_blkg() symbol thus inadvertently converting
 the entire macro.  Provide a minimal version which always assigns the
 request queue's root_blkg to the bio.
 
+[Colin Ian King]
+Fix check, include linux/module.h and set MODULE_LICENSE macro
+correctly.
+
 Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
 Closes: zfsonlinux#8287
-(cherry picked from commit https://github.com/tonyhutter/zfs/commit/b94a2e437c24c26d4725fa7159fd0525ff0889e1)
+(based on commit https://github.com/tonyhutter/zfs/commit/b94a2e437c24c26d4725fa7159fd0525ff0889e1)
 Signed-off-by: Colin Ian King <colin.king@canonical.com>
 
 ---
@@ -29,7 +33,7 @@ Index: zfs-linux-0.7.12/config/kernel-bio_set_dev.m4
  	AC_MSG_CHECKING([whether bio_set_dev() exists])
  	ZFS_LINUX_TRY_COMPILE([
  		#include <linux/bio.h>
-@@ -20,3 +20,34 @@ AC_DEFUN([ZFS_AC_KERNEL_BIO_SET_DEV], [
+@@ -20,3 +20,35 @@ AC_DEFUN([ZFS_AC_KERNEL_BIO_SET_DEV], [
  		AC_MSG_RESULT(no)
  	])
  ])
@@ -43,10 +47,11 @@ Index: zfs-linux-0.7.12/config/kernel-bio_set_dev.m4
 +AC_DEFUN([ZFS_AC_KERNEL_BIO_SET_DEV_GPL_ONLY], [
 +	AC_MSG_CHECKING([whether bio_set_dev() is GPL-only])
 +	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/module.h>
 +		#include <linux/bio.h>
 +		#include <linux/fs.h>
 +
-+		MODULE_LICENSE(ZFS_META_LICENSE)
++		MODULE_LICENSE("$ZFS_META_LICENSE");
 +	],[
 +		struct block_device *bdev = NULL;
 +		struct bio *bio = NULL;
