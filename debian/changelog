@@ -1,3 +1,11 @@
+zfs-linux (0.7.12-1ubuntu5) disco; urgency=medium
+
+  * fix Linux 4.8 build failures
+    - update 3304-linux-5-0-fix-bio-set-dev.patch to correctly
+      detect GPL'd symbol
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 23 Jan 2019 20:13:11 +0000
+
 zfs-linux (0.7.12-1ubuntu4) disco; urgency=medium
 
   * debian/patches: add Linux 5.0 compat fixes:
