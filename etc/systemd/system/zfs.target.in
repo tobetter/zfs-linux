@@ -1,7 +1,7 @@
 [Unit]
 Description=ZFS startup target
 Requires=zfs-mount.service
-Requires=zfs-share.service
+Wants=zfs-share.service
 Wants=zed.service
 
 [Install]
