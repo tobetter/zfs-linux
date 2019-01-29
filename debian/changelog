@@ -1,3 +1,13 @@
+zfs-linux (0.6.5.6-0ubuntu27) xenial; urgency=medium
+
+  * Fix modules not loaded on debian tests (LP: #1813749)
+    - ADT tests are failing with some Xenial packages because the zfs
+      module is not loaded before the tests start. This can be fixed
+      by loading the module on the main test script (kernel-smoke-test)
+      as done by the package built for later series.
+
+ -- Kleber Sacilotto de Souza <kleber.souza@canonical.com>  Tue, 29 Jan 2019 11:40:10 +0100
+
 zfs-linux (0.6.5.6-0ubuntu26) xenial; urgency=medium
 
   * Fix error exit when using -t option (LP: #1769937)
