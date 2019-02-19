@@ -1,4 +1,4 @@
-#!/bin/sh
+#!@SHELL@
 #
 # zfs-zed
 #
@@ -98,6 +98,7 @@ do_reload()
 
 # ----------------------------------------------------
 
+if ! (echo @SHELL@ | grep openrc 1>/dev/null 2>/dev/null); then
 	case "$1" in
 		start)
 			do_start
@@ -123,3 +124,11 @@ do_reload()
 	esac
 
 	exit $?
+else
+	# Create wrapper functions since Gentoo don't use the case part.
+	depend() { do_depend; }
+	start() { do_start; }
+	stop() { do_stop; }
+	status() { do_status; }
+	reload() { do_reload; }
+fi

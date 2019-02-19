@@ -8,7 +8,8 @@ dist_pkgdata_SCRIPTS = \
 	zfs_send_004_neg.ksh \
 	zfs_send_005_pos.ksh \
 	zfs_send_006_pos.ksh \
-	zfs_send_007_pos.ksh
+	zfs_send_007_pos.ksh \
+	zfs_send_sparse.ksh
 
 dist_pkgdata_DATA = \
 	zfs_send.cfg

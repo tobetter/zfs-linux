@@ -1,4 +1,4 @@
-#!/bin/sh
+#!@SHELL@
 #
 # zfs-share     This script will network share zfs filesystems and volumes.
 #
@@ -58,6 +58,7 @@ do_stop()
 
 # ----------------------------------------------------
 
+if ! (echo @SHELL@ | grep openrc 1>/dev/null 2>/dev/null); then
 	case "$1" in
 		start)
 			do_start
@@ -76,3 +77,9 @@ do_stop()
 	esac
 
 	exit $?
+else
+	# Create wrapper functions since Gentoo don't use the case part.
+	depend() { do_depend; }
+	start() { do_start; }
+	stop() { do_stop; }
+fi
