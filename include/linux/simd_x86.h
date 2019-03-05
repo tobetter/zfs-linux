@@ -284,7 +284,6 @@ __simd_state_enabled(const uint64_t state)
 	boolean_t has_osxsave;
 	uint64_t xcr0;
 
-
 #if defined(_KERNEL)
 #if defined(X86_FEATURE_OSXSAVE) && defined(KERNEL_EXPORTS_X86_FPU)
 	has_osxsave = !!boot_cpu_has(X86_FEATURE_OSXSAVE);
@@ -427,6 +426,7 @@ zfs_avx_available(void)
 #elif !defined(_KERNEL)
 	has_avx = __cpuid_has_avx();
 #endif
+
 	return (has_avx && __ymm_enabled());
 }
 
@@ -446,6 +446,7 @@ zfs_avx2_available(void)
 #elif !defined(_KERNEL)
 	has_avx2 = __cpuid_has_avx2();
 #endif
+
 	return (has_avx2 && __ymm_enabled());
 }
 
@@ -482,7 +483,6 @@ zfs_bmi2_available(void)
 	return (__cpuid_has_bmi2());
 #endif
 }
-
 
 /*
  * AVX-512 family of instruction sets:

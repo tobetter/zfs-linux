@@ -33,7 +33,6 @@ AC_DEFUN([ZFS_AC_KERNEL_BIO_SET_DEV_GPL_ONLY], [
 		#include <linux/module.h>
 		#include <linux/bio.h>
 		#include <linux/fs.h>
-
 		MODULE_LICENSE("$ZFS_META_LICENSE");
 	],[
 		struct block_device *bdev = NULL;
