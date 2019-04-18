@@ -4,7 +4,7 @@ Documentation=man:zfs(8)
 After=nfs-server.service nfs-kernel-server.service
 After=smb.service
 Before=rpc-statd-notify.service
-After=zfs-mount.service
+Wants=zfs-mount.service
 PartOf=nfs-server.service nfs-kernel-server.service
 PartOf=smb.service
 

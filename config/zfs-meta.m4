@@ -62,16 +62,18 @@ AC_DEFUN([ZFS_AC_META], [
 
 		ZFS_META_VERSION=_ZFS_AC_META_GETVAL([Version]);
 		if test -n "$ZFS_META_VERSION"; then
-			AC_DEFINE_UNQUOTED([ZFS_META_VERSION], ["$ZFS_META_VERSION"],
-				[Define the project version.]
-			)
+			AC_DEFINE_UNQUOTED([ZFS_META_VERSION],
+			    ["$ZFS_META_VERSION"],
+			    [Define the project version.])
+			AC_DEFINE_UNQUOTED([SPL_META_VERSION],
+			    [ZFS_META_VERSION],
+			    [Defined for legacy compatibility.])
 			AC_SUBST([ZFS_META_VERSION])
 		fi
 
 		if test -n "${_dpkg_parsechangelog}"; then
 			_dpkg_version=$(echo "${_dpkg_parsechangelog}" \
-				| $AWK '$[]1 == "Version:" { print $[]2; }' \
-				| cut -d- -f1)
+				| $AWK '$[]1 == "Version:" { print $[]2; }' | cut -d- -f1)
 			if test "${_dpkg_version}" != "$ZFS_META_VERSION"; then
 				AC_MSG_ERROR([
 	*** Version $ZFS_META_VERSION in the META file is different than
@@ -110,9 +112,12 @@ AC_DEFUN([ZFS_AC_META], [
 		fi
 
 		if test -n "$ZFS_META_RELEASE"; then
-			AC_DEFINE_UNQUOTED([ZFS_META_RELEASE], ["$ZFS_META_RELEASE"],
-				[Define the project release.]
-			)
+			AC_DEFINE_UNQUOTED([ZFS_META_RELEASE],
+			     ["$ZFS_META_RELEASE"],
+			     [Define the project release.])
+			AC_DEFINE_UNQUOTED([SPL_META_RELEASE],
+			    [ZFS_META_RELEASE],
+			    [Defined for legacy compatibility.])
 			AC_SUBST([ZFS_META_RELEASE])
 
 			RELEASE="$ZFS_META_RELEASE"
@@ -132,9 +137,11 @@ AC_DEFUN([ZFS_AC_META], [
 				test -n "$ZFS_META_RELEASE" && 
 				        ZFS_META_ALIAS="$ZFS_META_ALIAS-$ZFS_META_RELEASE"
 				AC_DEFINE_UNQUOTED([ZFS_META_ALIAS],
-					["$ZFS_META_ALIAS"],
-					[Define the project alias string.] 
-				)
+				    ["$ZFS_META_ALIAS"],
+				    [Define the project alias string.])
+				AC_DEFINE_UNQUOTED([SPL_META_ALIAS],
+				    [ZFS_META_ALIAS],
+				    [Defined for legacy compatibility.])
 				AC_SUBST([ZFS_META_ALIAS])
 		fi
 

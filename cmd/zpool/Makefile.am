@@ -16,17 +16,16 @@ zpool_SOURCES = \
 zpool_LDADD = \
 	$(top_builddir)/lib/libnvpair/libnvpair.la \
 	$(top_builddir)/lib/libuutil/libuutil.la \
-	$(top_builddir)/lib/libzpool/libzpool.la \
-	$(top_builddir)/lib/libzfs/libzfs.la \
-	$(top_builddir)/lib/libzfs_core/libzfs_core.la \
-	-lm $(LIBBLKID)
+	$(top_builddir)/lib/libzfs/libzfs.la
+
+zpool_LDADD += -lm $(LIBBLKID)
 
 zpoolconfdir = $(sysconfdir)/zfs/zpool.d
-zpoollibdir = /usr/lib/zfs-linux/zpool.d
+zpoolexecdir = $(zfsexecdir)/zpool.d
 
 EXTRA_DIST = zpool.d/README
 
-dist_zpoollib_SCRIPTS = \
+dist_zpoolexec_SCRIPTS = \
 	zpool.d/enc \
 	zpool.d/encdev \
 	zpool.d/fault_led \
@@ -119,5 +118,5 @@ install-data-hook:
 	for f in $(zpoolconfdefaults); do \
 	  test -f "$(DESTDIR)$(zpoolconfdir)/$${f}" -o \
 	       -L "$(DESTDIR)$(zpoolconfdir)/$${f}" || \
-	    ln -s "$(zpoollibdir)/$${f}" "$(DESTDIR)$(zpoolconfdir)"; \
+	    ln -s "$(zpoolexecdir)/$${f}" "$(DESTDIR)$(zpoolconfdir)"; \
 	done
