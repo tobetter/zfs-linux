@@ -1,3 +1,18 @@
+zfs-linux (0.7.12-1ubuntu6) eoan; urgency=medium
+
+  * Remove 3300-Add-check-for-totalram-pages.patch replace with
+    backported upstream fix
+    - 3300-Linux-5.0-compat-Use-totalram_pages.patch
+  * Add 5.0, 5.1, 5.2 zfs upstream compat fixes:
+    - 3305-Linux-5.0-compat-Fix-SUBDIRs.patch
+    - 3306-Linux-5.0-compat-Remove-incorrect-ASSERT.patch
+    - 3307-Linux-5.0-compat-Use-totalhigh_pages.patch
+    - 3308-Linux-5.0-compat-ASM_BUG-macro.patch
+    - 3309-Linux-5.2-compat-rw_tryupgrade.patch
+    - 3310-Linux-5.2-compat-Directly-call-wait_on_page_bit.patch
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 28 May 2019 14:24:14 +0100
+
 zfs-linux (0.7.12-1ubuntu5) disco; urgency=medium
 
   * fix Linux 4.8 build failures

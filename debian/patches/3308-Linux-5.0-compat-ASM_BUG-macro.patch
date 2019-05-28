@@ -1,0 +1,404 @@
+From a20f43b51ba87d4932f897e23cf9af181d4d1374 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Wed, 8 May 2019 10:18:40 -0700
+Subject: [PATCH] Linux 5.0 compat: ASM_BUG macro
+
+The 5.0 kernel defines the macro ASM_BUG.  In order to prevent a
+conflict and build failure rename ASM_BUG to ZFS_ASM_BUG.  This
+is currently only an issue on aarch64 but all instances of
+ASM_BUG we're renamed to avoid any future conflict on x86_64.
+
+Reviewed-by: Tomohiro Kusumi <kusumi.tomohiro@gmail.com>
+Reviewed-by: Richard Laager <rlaager@wiktel.com>
+Reviewed-by: Chris Dunlop <chris@onthe.net.au>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+(backported from upstream commit a20f43b51ba87d4932f897e23cf9af181d4d1374)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+Closes #8725
+Issue #8545
+---
+ .../zfs/vdev_raidz_math_aarch64_neon_common.h | 20 +++++++++----------
+ module/zfs/vdev_raidz_math_avx2.c             | 20 +++++++++----------
+ module/zfs/vdev_raidz_math_avx512bw.c         | 20 +++++++++----------
+ module/zfs/vdev_raidz_math_ssse3.c            | 20 +++++++++----------
+ 4 files changed, 40 insertions(+), 40 deletions(-)
+
+diff --git a/module/zfs/vdev_raidz_math_aarch64_neon_common.h b/module/zfs/vdev_raidz_math_aarch64_neon_common.h
+index cb9ff86c1..024917417 100644
+--- a/module/zfs/vdev_raidz_math_aarch64_neon_common.h
++++ b/module/zfs/vdev_raidz_math_aarch64_neon_common.h
+@@ -123,7 +123,7 @@
+ #define	_R_23(_0, _1, REG2, REG3, ...) REG2, REG3
+ #define	R_23(REG...) _R_23(REG, 1, 2, 3)
+ 
+-#define	ASM_BUG()	ASSERT(0)
++#define	ZFS_ASM_BUG()	ASSERT(0)
+ 
+ #define	OFFSET(ptr, val)	(((unsigned char *)(ptr))+val)
+ 
+@@ -197,7 +197,7 @@ typedef struct v {
+ 		:	"v20", "v21");					\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -221,7 +221,7 @@ typedef struct v {
+ 		:	RVR0(r), RVR1(r));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -256,7 +256,7 @@ typedef struct v {
+ 		:	WVR0(r), WVR1(r));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -280,7 +280,7 @@ typedef struct v {
+ 		:	RVR0(r), RVR1(r));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -329,7 +329,7 @@ typedef struct v {
+ 		[SRC1] "Q" (*(OFFSET(src, 16))));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -378,7 +378,7 @@ typedef struct v {
+ 		:	RVR0(r), RVR1(r));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -441,7 +441,7 @@ typedef struct v {
+ 		:	"v18", "v19");					\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -512,7 +512,7 @@ typedef struct v {
+ 		:	"v10", "v11", "v12", "v13", "v14", "v15");	\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -527,7 +527,7 @@ typedef struct v {
+ 		_MULx2(c, R_01(r));					\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+diff --git a/module/zfs/vdev_raidz_math_avx2.c b/module/zfs/vdev_raidz_math_avx2.c
+index 07113a235..063d29bcd 100644
+--- a/module/zfs/vdev_raidz_math_avx2.c
++++ b/module/zfs/vdev_raidz_math_avx2.c
+@@ -55,7 +55,7 @@
+ #define	_R_23(_0, _1, REG2, REG3, ...) REG2, REG3
+ #define	R_23(REG...) _R_23(REG, 1, 2, 3)
+ 
+-#define	ASM_BUG()	ASSERT(0)
++#define	ZFS_ASM_BUG()	ASSERT(0)
+ 
+ extern const uint8_t gf_clmul_mod_lt[4*256][16];
+ 
+@@ -84,7 +84,7 @@ typedef struct v {
+ 		    : : [SRC] "r" (src));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -104,7 +104,7 @@ typedef struct v {
+ 		    "vpxor %" VR1(r) ", %" VR3(r)", %" VR3(r));		\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -126,7 +126,7 @@ typedef struct v {
+ 		    "vmovdqa %" VR1(r) ", %" VR3(r));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -148,7 +148,7 @@ typedef struct v {
+ 		    : : [SRC] "r" (src));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -170,7 +170,7 @@ typedef struct v {
+ 		    : : [DST] "r" (dst));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -201,7 +201,7 @@ typedef struct v {
+ 		    "vpxor    %ymm13,     %" VR1(r)", %" VR1(r));	\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -216,7 +216,7 @@ typedef struct v {
+ 	    _MUL2(r);							\
+ 	    break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -277,7 +277,7 @@ static const uint8_t __attribute__((aligned(32))) _mul_mask = 0x0F;
+ 		    [lt] "r" (gf_clmul_mod_lt[4*(c)]));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -292,7 +292,7 @@ static const uint8_t __attribute__((aligned(32))) _mul_mask = 0x0F;
+ 		_MULx2(c, R_01(r));					\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+diff --git a/module/zfs/vdev_raidz_math_avx512bw.c b/module/zfs/vdev_raidz_math_avx512bw.c
+index 3d5326b9e..d605653db 100644
+--- a/module/zfs/vdev_raidz_math_avx512bw.c
++++ b/module/zfs/vdev_raidz_math_avx512bw.c
+@@ -57,7 +57,7 @@
+ #define	_R_23(_0, _1, REG2, REG3, ...) REG2, REG3
+ #define	R_23(REG...) _R_23(REG, 1, 2, 3)
+ 
+-#define	ASM_BUG()	ASSERT(0)
++#define	ZFS_ASM_BUG()	ASSERT(0)
+ 
+ extern const uint8_t gf_clmul_mod_lt[4*256][16];
+ 
+@@ -85,7 +85,7 @@ typedef struct v {
+ 		    : : [SRC] "r" (src));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -105,7 +105,7 @@ typedef struct v {
+ 		    "vpxorq %" VR1(r) ", %" VR3(r)", %" VR3(r));	\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -127,7 +127,7 @@ typedef struct v {
+ 		    "vmovdqa64 %" VR1(r) ", %" VR3(r));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -149,7 +149,7 @@ typedef struct v {
+ 		    : : [SRC] "r" (src));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -171,7 +171,7 @@ typedef struct v {
+ 		    : : [DST] "r" (dst));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -197,7 +197,7 @@ typedef struct v {
+ 		    "vmovdqu8   %zmm13,     %" VR1(r) "{%k2}");		\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -212,7 +212,7 @@ typedef struct v {
+ 	    _MUL2(r);							\
+ 	    break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -273,7 +273,7 @@ static const uint8_t __attribute__((aligned(64))) _mul_mask = 0x0F;
+ 		    [lt] "r" (gf_clmul_mod_lt[4*(c)]));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -288,7 +288,7 @@ static const uint8_t __attribute__((aligned(64))) _mul_mask = 0x0F;
+ 		_MULx2(c, R_01(r));					\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+diff --git a/module/zfs/vdev_raidz_math_ssse3.c b/module/zfs/vdev_raidz_math_ssse3.c
+index a015baab2..047a48d54 100644
+--- a/module/zfs/vdev_raidz_math_ssse3.c
++++ b/module/zfs/vdev_raidz_math_ssse3.c
+@@ -56,7 +56,7 @@
+ #define	_R_23(_0, _1, REG2, REG3, ...) REG2, REG3
+ #define	R_23(REG...) _R_23(REG, 1, 2, 3)
+ 
+-#define	ASM_BUG()	ASSERT(0)
++#define	ZFS_ASM_BUG()	ASSERT(0)
+ 
+ const uint8_t gf_clmul_mod_lt[4*256][16];
+ 
+@@ -85,7 +85,7 @@ typedef struct v {
+ 		    : : [SRC] "r" (src));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -105,7 +105,7 @@ typedef struct v {
+ 		    "pxor %" VR1(r) ", %" VR3(r));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -127,7 +127,7 @@ typedef struct v {
+ 		    "movdqa %" VR1(r) ", %" VR3(r));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -149,7 +149,7 @@ typedef struct v {
+ 		    : : [SRC] "r" (src));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -171,7 +171,7 @@ typedef struct v {
+ 		    : : [DST] "r" (dst));				\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -200,7 +200,7 @@ typedef struct v {
+ 		    "pxor    %xmm13,      %" VR1(r));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -215,7 +215,7 @@ typedef struct v {
+ 		_MUL2_x2(r);						\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -284,7 +284,7 @@ typedef struct v {
+ 		    [lt] "r" (gf_clmul_mod_lt[4*(c)]));			\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+@@ -299,7 +299,7 @@ typedef struct v {
+ 		_MULx2(c, R_01(r));					\
+ 		break;							\
+ 	default:							\
+-		ASM_BUG();						\
++		ZFS_ASM_BUG();						\
+ 	}								\
+ }
+ 
+-- 
+2.20.1
+

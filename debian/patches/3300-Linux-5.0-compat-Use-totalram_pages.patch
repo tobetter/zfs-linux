@@ -1,0 +1,73 @@
+From 031cea17a3db1dae3b6968a8c71bcfb678a03235 Mon Sep 17 00:00:00 2001
+From: Tony Hutter <hutter2@llnl.gov>
+Date: Thu, 10 Jan 2019 14:28:10 -0800
+Subject: [PATCH] Linux 5.0 compat: Use totalram_pages()
+
+totalram_pages() was converted to an atomic variable in 5.0:
+
+https://patchwork.kernel.org/patch/10652795/
+
+Its value should now be read though the totalram_pages() helper
+function.
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Tony Hutter <hutter2@llnl.gov>
+Closes #8263
+---
+ config/kernel-totalram-pages-func.m4 | 18 ++++++++++++++++++
+ config/kernel.m4                     |  1 +
+ module/zfs/arc.c                     |  4 ++--
+ 4 files changed, 28 insertions(+), 3 deletions(-)
+ create mode 100644 config/kernel-totalram-pages-func.m4
+
+Index: zfs-linux-0.7.12/config/kernel-totalram-pages-func.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.12/config/kernel-totalram-pages-func.m4
+@@ -0,0 +1,18 @@
++dnl #
++dnl # Linux 5.0: totalram_pages is no longer a global variable, and must be
++dnl # read via the totalram_pages() helper function.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_TOTALRAM_PAGES_FUNC], [
++	AC_MSG_CHECKING([whether totalram_pages() exists])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/mm.h>
++	],[
++		unsigned long pages __attribute__ ((unused));
++		pages = totalram_pages();
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_TOTALRAM_PAGES_FUNC, 1, [kernel has totalram_pages()])
++	],[
++		AC_MSG_RESULT(no)
++	])
++])
+Index: zfs-linux-0.7.12/module/zfs/arc.c
+===================================================================
+--- zfs-linux-0.7.12.orig/module/zfs/arc.c
++++ zfs-linux-0.7.12/module/zfs/arc.c
+@@ -4004,9 +4004,9 @@ arc_all_memory(void)
+ {
+ #ifdef _KERNEL
+ #ifdef CONFIG_HIGHMEM
+-	return (ptob(totalram_pages - totalhigh_pages));
++	return (ptob(zfs_totalram_pages - totalhigh_pages));
+ #else
+-	return (ptob(totalram_pages));
++	return (ptob(zfs_totalram_pages));
+ #endif /* CONFIG_HIGHMEM */
+ #else
+ 	return (ptob(physmem) / 2);
+Index: zfs-linux-0.7.12/config/kernel.m4
+===================================================================
+--- zfs-linux-0.7.12.orig/config/kernel.m4
++++ zfs-linux-0.7.12/config/kernel.m4
+@@ -130,6 +130,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_ACL_HAS_REFCOUNT
+ 	ZFS_AC_KERNEL_USERNS_CAPABILITIES
+ 	ZFS_AC_KERNEL_IN_COMPAT_SYSCALL
++	ZFS_AC_KERNEL_TOTALRAM_PAGES_FUNC
+ 
+ 	AS_IF([test "$LINUX_OBJ" != "$LINUX"], [
+ 		KERNELMAKE_PARAMS="$KERNELMAKE_PARAMS O=$LINUX_OBJ"
