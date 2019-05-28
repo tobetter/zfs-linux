@@ -1,0 +1,43 @@
+From ed158b19b1dddf26f2bbebb4d0fd21f04fdd5d38 Mon Sep 17 00:00:00 2001
+From: Tony Hutter <hutter2@llnl.gov>
+Date: Thu, 10 Jan 2019 17:07:05 -0800
+Subject: [PATCH] Linux 5.0 compat: Fix SUBDIRs
+
+SUBDIRs has been deprecated for a long time, and was finally removed in
+the 5.0 kernel.  Use "M=" instead.
+ 
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Tony Hutter <hutter2@llnl.gov>
+(backported from upstream commit ed158b19b1dddf26f2bbebb4d0fd21f04fdd5d38)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+Closes #8257 
+---
+
+Index: zfs-linux-0.7.12/module/Makefile.in
+===================================================================
+--- zfs-linux-0.7.12.orig/module/Makefile.in
++++ zfs-linux-0.7.12/module/Makefile.in
+@@ -36,12 +36,12 @@ modules:
+ 	list='$(SUBDIR_TARGETS)'; for targetdir in $$list; do \
+ 		$(MAKE) -C $$targetdir; \
+ 	done
+-	$(MAKE) -C @LINUX_OBJ@ SUBDIRS=`pwd` @KERNELMAKE_PARAMS@ CONFIG_ZFS=m $@
++	$(MAKE) -C @LINUX_OBJ@ M=`pwd` @KERNELMAKE_PARAMS@ CONFIG_ZFS=m $@
+ 
+ clean:
+ 	@# Only cleanup the kernel build directories when CONFIG_KERNEL
+ 	@# is defined.  This indicates that kernel modules should be built.
+-@CONFIG_KERNEL_TRUE@	$(MAKE) -C @LINUX_OBJ@ SUBDIRS=`pwd` @KERNELMAKE_PARAMS@ $@
++@CONFIG_KERNEL_TRUE@	$(MAKE) -C @LINUX_OBJ@ M=`pwd` @KERNELMAKE_PARAMS@ $@
+ 
+ 	if [ -f @SPL_SYMBOLS@ ]; then $(RM) @SPL_SYMBOLS@; fi
+ 	if [ -f @LINUX_SYMBOLS@ ]; then $(RM) @LINUX_SYMBOLS@; fi
+@@ -49,7 +49,7 @@ clean:
+ 
+ modules_install:
+ 	@# Install the kernel modules
+-	$(MAKE) -C @LINUX_OBJ@ SUBDIRS=`pwd` $@ \
++	$(MAKE) -C @LINUX_OBJ@ M=`pwd` $@ \
+ 		INSTALL_MOD_PATH=$(DESTDIR)$(INSTALL_MOD_PATH) \
+ 		INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) \
+ 		KERNELRELEASE=@LINUX_VERSION@
