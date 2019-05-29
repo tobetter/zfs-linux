@@ -1,0 +1,50 @@
+From c62818e16adcfec0e167cd98a83367fefefc14a3 Mon Sep 17 00:00:00 2001
+From: Andrea Righi <andrea.righi@canonical.com>
+Date: Tue, 14 May 2019 12:31:25 +0000
+Subject: [PATCH] zfs: fix build error with tracepoints enabled
+
+In b49151d684f44 tx_waited has been renamed to tx_dirty_delayed, but
+only in the tracepoint definition (in trace_dmu.h) and not in the rest
+of the code, causing build errors if zfs tracepoints are enabled.
+
+Fix by reverting tx_dirty_delayed back to the original name tx_waited.
+
+NOTE: this bug doesn't show up in regular builds, because zfs
+tracepoints are not enabled by default.
+
+Signed-off-by: Andrea Righi <andrea.righi@canonical.com>
+---
+ include/sys/trace_dmu.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Index: zfs-linux-0.7.5/include/sys/trace_dmu.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/sys/trace_dmu.h
++++ zfs-linux-0.7.5/include/sys/trace_dmu.h
+@@ -50,7 +50,7 @@ DECLARE_EVENT_CLASS(zfs_delay_mintime_cl
+ 	    __field(uint64_t,			tx_lastsnap_txg)
+ 	    __field(uint64_t,			tx_lasttried_txg)
+ 	    __field(boolean_t,			tx_anyobj)
+-	    __field(boolean_t,			tx_dirty_delayed)
++	    __field(boolean_t,			tx_waited)
+ 	    __field(hrtime_t,			tx_start)
+ 	    __field(boolean_t,			tx_wait_dirty)
+ 	    __field(int,			tx_err)
+@@ -62,7 +62,7 @@ DECLARE_EVENT_CLASS(zfs_delay_mintime_cl
+ 	    __entry->tx_lastsnap_txg		= tx->tx_lastsnap_txg;
+ 	    __entry->tx_lasttried_txg		= tx->tx_lasttried_txg;
+ 	    __entry->tx_anyobj			= tx->tx_anyobj;
+-	    __entry->tx_dirty_delayed		= tx->tx_dirty_delayed;
++	    __entry->tx_waited			= tx->tx_waited;
+ 	    __entry->tx_start			= tx->tx_start;
+ 	    __entry->tx_wait_dirty		= tx->tx_wait_dirty;
+ 	    __entry->tx_err			= tx->tx_err;
+@@ -74,7 +74,7 @@ DECLARE_EVENT_CLASS(zfs_delay_mintime_cl
+ 	    "} dirty %llu min_tx_time %llu",
+ 	    __entry->tx_txg, __entry->tx_lastsnap_txg,
+ 	    __entry->tx_lasttried_txg, __entry->tx_anyobj,
+-	    __entry->tx_dirty_delayed, __entry->tx_start,
++	    __entry->tx_waited, __entry->tx_start,
+ 	    __entry->tx_wait_dirty, __entry->tx_err,
+ 	    __entry->dirty, __entry->min_tx_time)
+ );
