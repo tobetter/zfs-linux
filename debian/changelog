@@ -1,3 +1,24 @@
+zfs-linux (0.7.5-1ubuntu16.6) bionic; urgency=medium
+
+  * Fix hung z_zvol tasks during 'zfs receive' (LP: #1772412)
+    - Adds a dedicated, per-pool, prefetch taskq to prevent the traverse
+      code from monopolizing the global (and limited) system_taskq by
+      inappropriately scheduling long running tasks on it. This fixes
+      z_zvol hung tasks.
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 29 May 2019 17:24:22 +0100
+
+zfs-linux (0.7.5-1ubuntu16.5) bionic; urgency=medium
+
+  * Fix build error with tracepoints enabled (LP: #1828763)
+    - In b49151d684f44 (bionic kernel master-next branch) tx_waited has been
+      renamed to tx_dirty_delayed, but only in the tracepoint definition (in
+      trace_dmu.h) and not in the rest of the code, causing build errors if
+      zfs tracepoints are enabled; fix by reverting tx_dirty_delayed back to
+      the original name tx_waited.
+
+ -- Andrea Righi <andrea.righi@canonical.com>  Thu, 16 May 2019 11:10:04 +0200
+
 zfs-linux (0.7.5-1ubuntu16.4) bionic; urgency=medium
 
   * Fix error exit when using -t option (LP: #1769937)

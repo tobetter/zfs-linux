@@ -1,0 +1,111 @@
+From 77d8a0f1a4d0b2f59cee63088f7987cb38e66538 Mon Sep 17 00:00:00 2001
+From: LOLi <loli10K@users.noreply.github.com>
+Date: Fri, 30 Mar 2018 21:10:01 +0200
+Subject: [PATCH] Fix hung z_zvol tasks during 'zfs receive'
+
+BugLink: https://bugs.launchpad.net/bugs/1772412
+
+During a receive operation zvol_create_minors_impl() can wait
+needlessly for the prefetch thread because both share the same tasks
+queue.  This results in hung tasks:
+
+<3>INFO: task z_zvol:5541 blocked for more than 120 seconds.
+<3>      Tainted: P           O  3.16.0-4-amd64
+<3>"echo 0 > /proc/sys/kernel/hung_task_timeout_secs" disables this message.
+
+The first z_zvol:5541 (zvol_task_cb) is waiting for the long running
+traverse_prefetch_thread:260
+
+root@linux:~# cat /proc/spl/taskq
+taskq                       act  nthr  spwn  maxt   pri  mina
+spl_system_taskq/0            1     2     0    64   100     1
+	active: [260]traverse_prefetch_thread [zfs](0xffff88003347ae40)
+	wait: 5541
+spl_delay_taskq/0             0     1     0     4   100     1
+	delay: spa_deadman [zfs](0xffff880039924000)
+z_zvol/1                      1     1     0     1   120     1
+	active: [5541]zvol_task_cb [zfs](0xffff88001fde6400)
+	pend: zvol_task_cb [zfs](0xffff88001fde6800)
+
+This change adds a dedicated, per-pool, prefetch taskq to prevent the
+traverse code from monopolizing the global (and limited) system_taskq by
+inappropriately scheduling long running tasks on it.
+
+Reviewed-by: Albert Lee <trisk@forkgnu.org>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: loli10K <ezomori.nozomu@gmail.com>
+(backported from upstream commit 77d8a0f1a4d0b2f59cee63088f7987cb38e66538)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+Closes #6330
+Closes #6890
+Closes #7343
+---
+ include/sys/spa_impl.h    |  1 +
+ module/zfs/dmu_traverse.c |  3 ++-
+ module/zfs/spa.c          | 13 +++++++++++++
+ 3 files changed, 16 insertions(+), 1 deletion(-)
+
+Index: zfs-linux-0.7.5/include/sys/spa_impl.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/sys/spa_impl.h
++++ zfs-linux-0.7.5/include/sys/spa_impl.h
+@@ -275,6 +275,7 @@ struct spa {
+ 	spa_stats_t	spa_stats;		/* assorted spa statistics */
+ 	hrtime_t	spa_ccw_fail_time;	/* Conf cache write fail time */
+ 	taskq_t		*spa_zvol_taskq;	/* Taskq for minor management */
++	taskq_t		*spa_prefetch_taskq;	/* Taskq for prefetch threads */
+ 	uint64_t	spa_multihost;		/* multihost aware (mmp) */
+ 	mmp_thread_t	spa_mmp;		/* multihost mmp thread */
+ 
+Index: zfs-linux-0.7.5/module/zfs/dmu_traverse.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/dmu_traverse.c
++++ zfs-linux-0.7.5/module/zfs/dmu_traverse.c
+@@ -31,6 +31,7 @@
+ #include <sys/dsl_pool.h>
+ #include <sys/dnode.h>
+ #include <sys/spa.h>
++#include <sys/spa_impl.h>
+ #include <sys/zio.h>
+ #include <sys/dmu_impl.h>
+ #include <sys/sa.h>
+@@ -626,7 +627,7 @@ traverse_impl(spa_t *spa, dsl_dataset_t
+ 	}
+ 
+ 	if (!(flags & TRAVERSE_PREFETCH_DATA) ||
+-	    taskq_dispatch(system_taskq, traverse_prefetch_thread,
++	    taskq_dispatch(spa->spa_prefetch_taskq, traverse_prefetch_thread,
+ 	    td, TQ_NOQUEUE) == TASKQID_INVALID)
+ 		pd->pd_exited = B_TRUE;
+ 
+Index: zfs-linux-0.7.5/module/zfs/spa.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/spa.c
++++ zfs-linux-0.7.5/module/zfs/spa.c
+@@ -1183,6 +1183,14 @@ spa_activate(spa_t *spa, int mode)
+ 	    1, INT_MAX, 0);
+ 
+ 	/*
++	 * Taskq dedicated to prefetcher threads: this is used to prevent the
++	 * pool traverse code from monopolizing the global (and limited)
++	 * system_taskq by inappropriately scheduling long running tasks on it.
++	 */
++	spa->spa_prefetch_taskq = taskq_create("z_prefetch", boot_ncpus,
++	    defclsyspri, 1, INT_MAX, TASKQ_DYNAMIC);
++
++	/*
+ 	 * The taskq to upgrade datasets in this pool. Currently used by
+ 	 * feature SPA_FEATURE_USEROBJ_ACCOUNTING.
+ 	 */
+@@ -1211,6 +1219,11 @@ spa_deactivate(spa_t *spa)
+ 		spa->spa_zvol_taskq = NULL;
+ 	}
+ 
++	if (spa->spa_prefetch_taskq) {
++		taskq_destroy(spa->spa_prefetch_taskq);
++		spa->spa_prefetch_taskq = NULL;
++	}
++
+ 	if (spa->spa_upgrade_taskq) {
+ 		taskq_destroy(spa->spa_upgrade_taskq);
+ 		spa->spa_upgrade_taskq = NULL;
