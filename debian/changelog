@@ -1,3 +1,9 @@
+zfs-linux (0.7.12-2+deb10u1) testing-proposed-updates; urgency=high
+
+  * Patch: Disable SIMD on 4.19.37+ or 5.0+ kernels. (Closes: #929929)
+
+ -- Mo Zhou <cdluminate@gmail.com>  Sun, 09 Jun 2019 03:17:40 +0000
+
 zfs-linux (0.7.12-2) unstable; urgency=medium
 
   [ Colin Ian King ]
