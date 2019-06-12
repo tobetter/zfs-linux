@@ -4007,6 +4007,14 @@ arc_shrink(int64_t to_free)
 #endif
 #endif
 
+#ifndef zfs_totalhigh_pages
+#ifdef HAVE_TOTALHIGH_PAGES
+#define        zfs_totalhigh_pages     totalhigh_pages()
+#else
+#define        zfs_totalhigh_pages     totalhigh_pages
+#endif
+#endif
+
 /*
  * Return maximum amount of memory that we could possibly use.  Reduced
  * to half of all memory in user space which is primarily used for testing.
@@ -4016,7 +4024,7 @@ arc_all_memory(void)
 {
 #ifdef _KERNEL
 #ifdef CONFIG_HIGHMEM
-	return (ptob(zfs_totalram_pages - totalhigh_pages));
+	return (ptob(zfs_totalram_pages - zfs_totalhigh_pages));
 #else
 	return (ptob(zfs_totalram_pages));
 #endif /* CONFIG_HIGHMEM */
