@@ -3996,6 +3996,26 @@ arc_shrink(int64_t to_free)
 }
 
 /*
+ *  This is from spl, however older spl versions do not define this
+ *  and new versions do, so define it if required
+ */
+#ifndef zfs_totalram_pages
+#ifdef HAVE_TOTALRAM_PAGES_FUNC
+#define        zfs_totalram_pages      totalram_pages()
+#else
+#define        zfs_totalram_pages      totalram_pages
+#endif
+#endif
+
+#ifndef zfs_totalhigh_pages
+#ifdef HAVE_TOTALHIGH_PAGES
+#define        zfs_totalhigh_pages     totalhigh_pages()
+#else
+#define        zfs_totalhigh_pages     totalhigh_pages
+#endif
+#endif
+
+/*
  * Return maximum amount of memory that we could possibly use.  Reduced
  * to half of all memory in user space which is primarily used for testing.
  */

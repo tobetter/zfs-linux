@@ -51,7 +51,22 @@ Index: zfs-linux-0.7.12/module/zfs/arc.c
 ===================================================================
 --- zfs-linux-0.7.12.orig/module/zfs/arc.c
 +++ zfs-linux-0.7.12/module/zfs/arc.c
-@@ -4004,7 +4004,7 @@ arc_all_memory(void)
+@@ -4007,6 +4007,14 @@ arc_shrink(int64_t to_free)
+ #endif
+ #endif
+ 
++#ifndef zfs_totalhigh_pages
++#ifdef HAVE_TOTALHIGH_PAGES
++#define        zfs_totalhigh_pages     totalhigh_pages()
++#else
++#define        zfs_totalhigh_pages     totalhigh_pages
++#endif
++#endif
++
+ /*
+  * Return maximum amount of memory that we could possibly use.  Reduced
+  * to half of all memory in user space which is primarily used for testing.
+@@ -4016,7 +4024,7 @@ arc_all_memory(void)
  {
  #ifdef _KERNEL
  #ifdef CONFIG_HIGHMEM
