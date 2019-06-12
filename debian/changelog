@@ -1,3 +1,11 @@
+zfs-linux (0.7.12-1ubuntu7) eoan; urgency=medium
+
+  * Rework totalram and totalhigh pages patches to cater
+    for an older spl that may not have the compat fixes
+    defined.
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 12 Jun 2019 21:08:23 +0100
+
 zfs-linux (0.7.12-1ubuntu6) eoan; urgency=medium
 
   * Remove 3300-Add-check-for-totalram-pages.patch replace with
