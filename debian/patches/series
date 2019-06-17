@@ -48,3 +48,4 @@ enable-zed.patch
 3308-Linux-5.0-compat-ASM_BUG-macro.patch
 3309-Linux-5.2-compat-rw_tryupgrade.patch
 3310-Linux-5.2-compat-Directly-call-wait_on_page_bit.patch
+zsys-support.patch

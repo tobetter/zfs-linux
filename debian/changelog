@@ -1,3 +1,16 @@
+zfs-linux (0.7.12-1ubuntu8) eoan; urgency=medium
+
+  * zsys-support.patch: Support zsys systems
+    Zsys is an enhanced and structured dataset layout for ZFS.
+    It enables advanced use cases by differentiating system,
+    user data and persistent partitions to allow only partial
+    permanent or temporary rollback without destroying intermediate
+    snapshots.
+
+  Work done with Jean-Baptiste.
+
+ -- Didier Roche <didrocks@ubuntu.com>  Mon, 17 Jun 2019 11:01:23 +0200
+
 zfs-linux (0.7.12-1ubuntu7) eoan; urgency=medium
 
   * Rework totalram and totalhigh pages patches to cater
