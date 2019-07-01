@@ -1,3 +1,17 @@
+zfs-linux (0.8.1-1ubuntu1) eoan; urgency=medium
+
+  * Sync from Debian experimental
+  * Update Ubuntu sauce patches:
+    - 0010-fix-install-path-of-zpool.d-scripts.patch
+    - 2100-zfs-load-module.patch
+    - 2200-add-zfs-0.6.x-ioctl-compat-shim.patch
+    - 3100-remove-libzfs-module-timeout.patch
+    - zsys-support.patch
+  * Add in zfs-doc and zfs-dbg to control file
+  * Limit to 64 bit architectures only
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 1 Jul 2019 09:29:11 +0100
+
 zfs-linux (0.8.1-1) experimental; urgency=medium
 
   * New upstream version 0.8.1
