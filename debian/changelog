@@ -1,3 +1,10 @@
+zfs-linux (0.8.1-1ubuntu2) eoan; urgency=medium
+
+  * Disable dkms tests as Ubuntu has drivers built
+    into the kernel.
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 3 Jul 2019 08:21:23 +0100
+
 zfs-linux (0.8.1-1ubuntu1) eoan; urgency=medium
 
   * Sync from Debian experimental
