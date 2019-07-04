@@ -1,3 +1,11 @@
+zfs-linux (0.8.1-1ubuntu4) eoan; urgency=medium
+
+  * Ensure any previous ZFS/SPL modules are removed before loading
+    new ZFS/SPL modules to ensure correct drivers are being tested.
+    Changes in debian/tests/kernel-smoke-test
+ 
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 4 Jul 2019 12:22:21 +0100
+
 zfs-linux (0.8.1-1ubuntu3) eoan; urgency=medium
 
   * Ensure libc6-dev or libc-dev is installed when building zfs-dkms
