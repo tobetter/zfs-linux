@@ -1,3 +1,10 @@
+zfs-linux (0.8.1-1ubuntu5) eoan; urgency=medium
+
+  * Fix s390x stack smashing because a lua setjmp/longjmp buf was
+    to small for this architecture.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 5 Jul 2019 15:43:22 +0100
+
 zfs-linux (0.8.1-1ubuntu4) eoan; urgency=medium
 
   * Ensure any previous ZFS/SPL modules are removed before loading
