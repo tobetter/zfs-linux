@@ -9,3 +9,4 @@ init-debian-openrc-workaround.patch
 2200-add-zfs-0.6.x-ioctl-compat-shim.patch
 3100-remove-libzfs-module-timeout.patch
 zsys-support.patch
+3200-increase-s390x-jmpbuff-size.patch
