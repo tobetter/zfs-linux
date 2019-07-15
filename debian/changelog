@@ -1,3 +1,10 @@
+zfs-linux (0.8.1-1ubuntu7) eoan; urgency=medium
+
+  * debian/control: Make zfs-dracut arch-restricted again, matching what
+    was uploaded in 0.7.11-3ubuntu3 and mistakenly dropped in a merge.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Mon, 15 Jul 2019 15:50:40 -0600
+
 zfs-linux (0.8.1-1ubuntu6) eoan; urgency=medium
 
   * Make zfs-initramfs architecture-dependent again, so it doesn't exist on
