@@ -161,7 +161,7 @@ Description: OpenZFS filesystem kernel modules for Linux
  OpenZFS.
 
 Package: zfs-initramfs
-Architecture: all
+Architecture: amd64 arm64 ppc64el s390x
 Depends: busybox-initramfs | busybox-static | busybox,
          initramfs-tools,
          zfs-modules | zfs-dkms,

@@ -1,3 +1,10 @@
+zfs-linux (0.8.1-1ubuntu6) eoan; urgency=medium
+
+  * Make zfs-initramfs architecture-dependent again, so it doesn't exist on
+    our 32-bit archs and try to promote zfs-dkms to main.
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Mon, 15 Jul 2019 08:12:29 -0700
+
 zfs-linux (0.8.1-1ubuntu5) eoan; urgency=medium
 
   * Fix s390x stack smashing because a lua setjmp/longjmp buf was
