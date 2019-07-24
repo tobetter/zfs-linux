@@ -10,3 +10,4 @@ init-debian-openrc-workaround.patch
 3100-remove-libzfs-module-timeout.patch
 zsys-support.patch
 3200-increase-s390x-jmpbuff-size.patch
+git_fix_mount_race.patch

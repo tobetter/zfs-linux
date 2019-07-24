@@ -1,3 +1,16 @@
+zfs-linux (0.8.1-1ubuntu8) eoan; urgency=medium
+
+  * debian/patches/git_fix_mount_race.patch:
+    - Cherry-pick from upstream to fix a race when using canmount=off
+      (LP: #1837717)
+  * debian/patches/zsys-support.patch:
+    - Don't clone on zsys non zsys bootfs. The zsys daemon will clone it for
+      us.
+    - Hook into zfs-mount-generator as step 1. We will need further
+      optimization in a separate pass.
+
+ -- Didier Roche <didrocks@ubuntu.com>  Wed, 24 Jul 2019 13:28:04 +0200
+
 zfs-linux (0.8.1-1ubuntu7) eoan; urgency=medium
 
   * debian/control: Make zfs-dracut arch-restricted again, matching what
