@@ -686,7 +686,8 @@ setup_snapshot_booting()
 				clone_additional_parameters="-o org.zol:mountpoint=${mountpoint}"
 				mountpoint=none
 			else
-				clone_additional_parameters="-o org.zsys:bootfs=$(get_fs_value "${s%%@*}" org.zsys:bootfs)"
+				[ "$(get_fs_value "$s" org.zsys:bootfs)" != "yes" ] && continue
+				clone_additional_parameters="-o org.zsys:bootfs=yes"
 			fi
 
 			# Clone the snapshot into its own
