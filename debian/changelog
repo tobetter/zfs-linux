@@ -1,3 +1,15 @@
+zfs-linux (0.8.1-1ubuntu9) eoan; urgency=medium
+
+  [ Colin Ian King ]
+  * Apply upstream Linux 5.3 compat fixes:
+    - debian/patches/3300-Linux-5.3-compat-rw_semaphore-owner.patch
+    - debian/patches/3301-Linux-5.3-compat-retire-rw_tryupgrade.patch
+  [ Thadeu Lima de Souza Cascardo ]
+  * module/Makefile.in: Use obj-m instead of subdir-m
+    - obj-m should be now used for module building
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 6 Aug 2019 15:52:42 +0100
+
 zfs-linux (0.8.1-1ubuntu8) eoan; urgency=medium
 
   * debian/patches/git_fix_mount_race.patch:
