@@ -1,3 +1,13 @@
+zfs-linux (0.6.5.6-0ubuntu28) xenial; urgency=medium
+
+  * Fix ZFS shrinker deadlock with xattrs (LP: #1839521)
+    - Upstream ZFS fix 31b6111fd92a ("Kill zp->z_xattr_parent to prevent pinning")
+      and ddae16a9cf0b ("xattr dir doesn't get purged during iput") fix a deadlock
+      in shrinker path when a xattr directory inode and its xattr inode are in the
+      same disposal list and the xattr dir inode is evicted before the xattr inode.
+
+ -- Mauricio Faria de Oliveira <mfo@canonical.com>  Wed, 07 Aug 2019 11:01:11 -0300
+
 zfs-linux (0.6.5.6-0ubuntu27) xenial; urgency=medium
 
   * Fix modules not loaded on debian tests (LP: #1813749)
