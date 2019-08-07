@@ -1,0 +1,239 @@
+From 31b6111fd92a6bc79a34cb18fd919a29c407ff67 Mon Sep 17 00:00:00 2001
+From: Chunwei Chen <david.chen@osnexus.com>
+Date: Tue, 5 Jul 2016 17:24:36 -0700
+Subject: [PATCH 2/2] Kill zp->z_xattr_parent to prevent pinning
+
+zp->z_xattr_parent will pin the parent. This will cause huge issue
+when unlink a file with xattr. Because the unlinked file is pinned, it
+will never get purged immediately. And because of that, the xattr
+stuff will never be marked as unlinked. So the whole unlinked stuff
+will stay there until shrink cache or umount.
+
+This change partially reverts e89260a.  This is safe because only the
+zp->z_xattr_parent optimization is removed, zpl_xattr_security_init()
+is still called from the zpl outside the inode lock.
+
+Signed-off-by: Chunwei Chen <david.chen@osnexus.com>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Chris Dunlop <chris@onthe.net.au>
+[mfo: backport: zfs_znode.c hunk 6: refresh.]
+Signed-off-by: Mauricio Faria de Oliveira <mfo@canonical.com>
+Issue #4359
+Issue #3508
+Issue #4413
+Issue #4827
+---
+ include/sys/zfs_znode.h |  1 -
+ module/zfs/zfs_acl.c    | 59 ++++++++++++++++-------------------------
+ module/zfs/zfs_znode.c  | 29 +++-----------------
+ 3 files changed, 26 insertions(+), 63 deletions(-)
+
+Index: zfs-linux/include/sys/zfs_znode.h
+===================================================================
+--- zfs-linux.orig/include/sys/zfs_znode.h
++++ zfs-linux/include/sys/zfs_znode.h
+@@ -209,7 +209,6 @@ typedef struct znode {
+ 	zfs_acl_t	*z_acl_cached;	/* cached acl */
+ 	krwlock_t	z_xattr_lock;	/* xattr data lock */
+ 	nvlist_t	*z_xattr_cached; /* cached xattrs */
+-	struct znode	*z_xattr_parent; /* xattr parent znode */
+ 	list_node_t	z_link_node;	/* all znodes in fs link */
+ 	sa_handle_t	*z_sa_hdl;	/* handle to sa data */
+ 	boolean_t	z_is_sa;	/* are we native sa? */
+Index: zfs-linux/module/zfs/zfs_acl.c
+===================================================================
+--- zfs-linux.orig/module/zfs/zfs_acl.c
++++ zfs-linux/module/zfs/zfs_acl.c
+@@ -2473,53 +2473,33 @@ zfs_zaccess(znode_t *zp, int mode, int f
+ {
+ 	uint32_t	working_mode;
+ 	int		error;
+-	boolean_t	check_privs;
+-	znode_t		*check_zp = zp;
++	int		is_attr;
++	boolean_t 	check_privs;
++	znode_t		*xzp;
++	znode_t 	*check_zp = zp;
+ 	mode_t		needed_bits;
+ 	uid_t		owner;
+ 
++	is_attr = ((zp->z_pflags & ZFS_XATTR) && S_ISDIR(ZTOI(zp)->i_mode));
++
+ 	/*
+ 	 * If attribute then validate against base file
+ 	 */
+-	if ((zp->z_pflags & ZFS_XATTR) && S_ISDIR(ZTOI(zp)->i_mode)) {
++	if (is_attr) {
+ 		uint64_t	parent;
+ 
+-		rw_enter(&zp->z_xattr_lock, RW_READER);
+-		if (zp->z_xattr_parent) {
+-			check_zp = zp->z_xattr_parent;
+-			rw_exit(&zp->z_xattr_lock);
+-
+-			/*
+-			 * Verify a lookup yields the same znode.
+-			 */
+-			ASSERT3S(sa_lookup(zp->z_sa_hdl, SA_ZPL_PARENT(
+-			    ZTOZSB(zp)), &parent, sizeof (parent)), ==, 0);
+-			ASSERT3U(check_zp->z_id, ==, parent);
+-		} else {
+-			rw_exit(&zp->z_xattr_lock);
+-
+-			error = sa_lookup(zp->z_sa_hdl, SA_ZPL_PARENT(
+-			    ZTOZSB(zp)), &parent, sizeof (parent));
+-			if (error)
+-				return (error);
+-
+-			/*
+-			 * Cache the lookup on the parent file znode as
+-			 * zp->z_xattr_parent and hold a reference.  This
+-			 * effectively pins the parent in memory until all
+-			 * child xattr znodes have been destroyed and
+-			 * release their references in zfs_inode_destroy().
+-			 */
+-			error = zfs_zget(ZTOZSB(zp), parent, &check_zp);
+-			if (error)
+-				return (error);
+-
+-			rw_enter(&zp->z_xattr_lock, RW_WRITER);
+-			if (zp->z_xattr_parent == NULL)
+-				zp->z_xattr_parent = check_zp;
+-			rw_exit(&zp->z_xattr_lock);
++		if ((error = sa_lookup(zp->z_sa_hdl,
++		    SA_ZPL_PARENT(ZTOZSB(zp)), &parent,
++		    sizeof (parent))) != 0)
++			return (error);
++
++		if ((error = zfs_zget(ZTOZSB(zp),
++		    parent, &xzp)) != 0)	{
++			return (error);
+ 		}
+ 
++		check_zp = xzp;
++
+ 		/*
+ 		 * fixup mode to map to xattr perms
+ 		 */
+@@ -2561,11 +2541,15 @@ zfs_zaccess(znode_t *zp, int mode, int f
+ 
+ 	if ((error = zfs_zaccess_common(check_zp, mode, &working_mode,
+ 	    &check_privs, skipaclchk, cr)) == 0) {
++		if (is_attr)
++			iput(ZTOI(xzp));
+ 		return (secpolicy_vnode_access2(cr, ZTOI(zp), owner,
+ 		    needed_bits, needed_bits));
+ 	}
+ 
+ 	if (error && !check_privs) {
++		if (is_attr)
++			iput(ZTOI(xzp));
+ 		return (error);
+ 	}
+ 
+@@ -2626,6 +2610,9 @@ zfs_zaccess(znode_t *zp, int mode, int f
+ 		    needed_bits, needed_bits);
+ 	}
+ 
++	if (is_attr)
++		iput(ZTOI(xzp));
++
+ 	return (error);
+ }
+ 
+Index: zfs-linux/module/zfs/zfs_znode.c
+===================================================================
+--- zfs-linux.orig/module/zfs/zfs_znode.c
++++ zfs-linux/module/zfs/zfs_znode.c
+@@ -120,7 +120,6 @@ zfs_znode_cache_constructor(void *buf, v
+ 	zp->z_dirlocks = NULL;
+ 	zp->z_acl_cached = NULL;
+ 	zp->z_xattr_cached = NULL;
+-	zp->z_xattr_parent = NULL;
+ 	zp->z_moved = 0;
+ 	return (0);
+ }
+@@ -143,7 +142,6 @@ zfs_znode_cache_destructor(void *buf, vo
+ 	ASSERT(zp->z_dirlocks == NULL);
+ 	ASSERT(zp->z_acl_cached == NULL);
+ 	ASSERT(zp->z_xattr_cached == NULL);
+-	ASSERT(zp->z_xattr_parent == NULL);
+ }
+ 
+ static int
+@@ -435,11 +433,6 @@ zfs_inode_destroy(struct inode *ip)
+ 		zp->z_xattr_cached = NULL;
+ 	}
+ 
+-	if (zp->z_xattr_parent) {
+-		zfs_iput_async(ZTOI(zp->z_xattr_parent));
+-		zp->z_xattr_parent = NULL;
+-	}
+-
+ 	kmem_cache_free(znode_cache, zp);
+ }
+ 
+@@ -501,8 +494,7 @@ zfs_inode_set_ops(zfs_sb_t *zsb, struct
+  */
+ static znode_t *
+ zfs_znode_alloc(zfs_sb_t *zsb, dmu_buf_t *db, int blksz,
+-    dmu_object_type_t obj_type, uint64_t obj, sa_handle_t *hdl,
+-    struct inode *dip)
++    dmu_object_type_t obj_type, uint64_t obj, sa_handle_t *hdl)
+ {
+ 	znode_t	*zp;
+ 	struct inode *ip;
+@@ -521,7 +513,6 @@ zfs_znode_alloc(zfs_sb_t *zsb, dmu_buf_t
+ 	ASSERT(zp->z_dirlocks == NULL);
+ 	ASSERT3P(zp->z_acl_cached, ==, NULL);
+ 	ASSERT3P(zp->z_xattr_cached, ==, NULL);
+-	ASSERT3P(zp->z_xattr_parent, ==, NULL);
+ 	zp->z_moved = 0;
+ 	zp->z_sa_hdl = NULL;
+ 	zp->z_unlinked = 0;
+@@ -560,14 +551,6 @@ zfs_znode_alloc(zfs_sb_t *zsb, dmu_buf_t
+ 
+ 	zp->z_mode = mode;
+ 
+-	/*
+-	 * xattr znodes hold a reference on their unique parent
+-	 */
+-	if (dip && zp->z_pflags & ZFS_XATTR) {
+-		igrab(dip);
+-		zp->z_xattr_parent = ITOZ(dip);
+-	}
+-
+ 	ip->i_ino = obj;
+ 	zfs_inode_update(zp);
+ 	zfs_inode_set_ops(zsb, ip);
+@@ -913,8 +896,7 @@ zfs_mknode(znode_t *dzp, vattr_t *vap, d
+ 	VERIFY(sa_replace_all_by_template(sa_hdl, sa_attrs, cnt, tx) == 0);
+ 
+ 	if (!(flag & IS_ROOT_NODE)) {
+-		*zpp = zfs_znode_alloc(zsb, db, 0, obj_type, obj, sa_hdl,
+-		    ZTOI(dzp));
++		*zpp = zfs_znode_alloc(zsb, db, 0, obj_type, obj, sa_hdl);
+ 		VERIFY(*zpp != NULL);
+ 		VERIFY(dzp != NULL);
+ 	} else {
+@@ -1124,7 +1106,7 @@ again:
+ 	 * bonus buffer.
+ 	 */
+ 	zp = zfs_znode_alloc(zsb, db, doi.doi_data_block_size,
+-	    doi.doi_bonus_type, obj_num, NULL, NULL);
++	    doi.doi_bonus_type, obj_num, NULL);
+ 	if (zp == NULL) {
+ 		err = SET_ERROR(ENOENT);
+ 	} else {
+@@ -1162,11 +1144,6 @@ zfs_rezget(znode_t *zp)
+ 		nvlist_free(zp->z_xattr_cached);
+ 		zp->z_xattr_cached = NULL;
+ 	}
+-
+-	if (zp->z_xattr_parent) {
+-		zfs_iput_async(ZTOI(zp->z_xattr_parent));
+-		zp->z_xattr_parent = NULL;
+-	}
+ 	rw_exit(&zp->z_xattr_lock);
+ 
+ 	ASSERT(zp->z_sa_hdl == NULL);

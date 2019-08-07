@@ -30,3 +30,5 @@ enable-zed.patch
 3100-remove-libzfs-module-timeout.patch
 3202-Fix-zpl_mount-deadlock.patch
 3203-Fix-zpool-create-t-tempname.patch
+3204-xattr-dir-doesn-t-get-purged-during-iput.patch
+3205-Kill-zp-z_xattr_parent-to-prevent-pinning.patch
