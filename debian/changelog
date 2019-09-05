@@ -1,3 +1,9 @@
+zfs-linux (0.8.1-1ubuntu10) eoan; urgency=medium
+
+  * No-change upload with strops.h and sys/strops.h removed in glibc.
+
+ -- Matthias Klose <doko@ubuntu.com>  Thu, 05 Sep 2019 11:17:48 +0000
+
 zfs-linux (0.8.1-1ubuntu9) eoan; urgency=medium
 
   [ Colin Ian King ]
