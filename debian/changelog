@@ -1,3 +1,9 @@
+zfs-linux (0.8.1-1ubuntu11) eoan; urgency=medium
+
+  * Restrict zfs-modules deps to 64-bit arches only to avoid zfs-dkms in main.
+
+ -- Adam Conrad <adconrad@ubuntu.com>  Thu, 05 Sep 2019 14:57:11 -0600
+
 zfs-linux (0.8.1-1ubuntu10) eoan; urgency=medium
 
   * No-change upload with strops.h and sys/strops.h removed in glibc.
