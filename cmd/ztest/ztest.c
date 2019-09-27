@@ -107,7 +107,6 @@
 #include <sys/vdev_impl.h>
 #include <sys/vdev_file.h>
 #include <sys/vdev_initialize.h>
-#include <sys/vdev_raidz.h>
 #include <sys/vdev_trim.h>
 #include <sys/spa_impl.h>
 #include <sys/metaslab_impl.h>
@@ -2746,8 +2745,24 @@ ztest_spa_create_destroy(ztest_ds_t *zd, uint64_t id)
 	VERIFY3U(EEXIST, ==,
 	    spa_create(zo->zo_pool, nvroot, NULL, NULL, NULL));
 	nvlist_free(nvroot);
+
+	/*
+	 * We open a reference to the spa and then we try to export it
+	 * expecting one of the following errors:
+	 *
+	 * EBUSY
+	 *	Because of the reference we just opened.
+	 *
+	 * ZFS_ERR_EXPORT_IN_PROGRESS
+	 *	For the case that there is another ztest thread doing
+	 *	an export concurrently.
+	 */
 	VERIFY3U(0, ==, spa_open(zo->zo_pool, &spa, FTAG));
-	VERIFY3U(EBUSY, ==, spa_destroy(zo->zo_pool));
+	int error = spa_destroy(zo->zo_pool);
+	if (error != EBUSY && error != ZFS_ERR_EXPORT_IN_PROGRESS) {
+		fatal(0, "spa_destroy(%s) returned unexpected value %d",
+		    spa->spa_name, error);
+	}
 	spa_close(spa, FTAG);
 
 	(void) pthread_rwlock_unlock(&ztest_name_lock);
@@ -7094,8 +7109,6 @@ ztest_run(ztest_shared_t *zs)
 	VERIFY0(spa_open(ztest_opts.zo_pool, &spa, FTAG));
 	metaslab_preload_limit = ztest_random(20) + 1;
 	ztest_spa = spa;
-
-	VERIFY0(vdev_raidz_impl_set("cycle"));
 
 	dmu_objset_stats_t dds;
 	VERIFY0(ztest_dmu_objset_own(ztest_opts.zo_pool,

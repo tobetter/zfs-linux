@@ -198,7 +198,7 @@ unsigned char SRC __attribute__((vector_size(16)));
 
 static boolean_t fletcher_4_aarch64_neon_valid(void)
 {
-	return (kfpu_allowed());
+	return (B_TRUE);
 }
 
 const fletcher_4_ops_t fletcher_4_aarch64_neon_ops = {
