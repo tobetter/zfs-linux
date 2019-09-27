@@ -1,3 +1,15 @@
+zfs-linux (0.8.1-1ubuntu12) eoan; urgency=medium
+
+  * Rename zsys-support.patch to 4000-zsys-support.patch 
+  * debian/patches/4500-fix-generator-invalid-cache.patch:
+    - Regenerate cache file if empty to fix a race for the mount
+      generator and fstab which contains /boot/grub (LP: #1845606)
+  * debian/patches/4501-fix-var-lib-race.patch:
+    - Fix a race between systemd-random-seed and zfs mount -a if
+      /var/lib is a separate persistent dataset. (LP: #1845298)
+
+ -- Didier Roche <didrocks@ubuntu.com>  Fri, 27 Sep 2019 09:48:23 +0200
+
 zfs-linux (0.8.1-1ubuntu11) eoan; urgency=medium
 
   * Restrict zfs-modules deps to 64-bit arches only to avoid zfs-dkms in main.
