@@ -38,7 +38,7 @@ Index: zfs-linux-0.8.1/contrib/initramfs/scripts/zfs.in
  
 +	# Detect if we are on a zsys system, which will generates an unique UUID
 +	# and override ZFS_BOOTFS
-+	use_zsys=$(get_fs_value "${rootfs}" org.zsys:bootfs)
++	use_zsys=$(get_fs_value "${rootfs}" com.ubuntu.zsys:bootfs)
 +	if [ "$use_zsys" = "yes" ]; then
 +		zsys_uid=`uid`
 +		ZFS_BOOTFS="${rootfs%_*}_${zsys_uid}" # we strip old uid and add new one
@@ -91,8 +91,8 @@ Index: zfs-linux-0.8.1/contrib/initramfs/scripts/zfs.in
 +				clone_additional_parameters="-o org.zol:mountpoint=${mountpoint}"
 +				mountpoint=none
 +			else
-+				[ "$(get_fs_value "$s" org.zsys:bootfs)" != "yes" ] && continue
-+				clone_additional_parameters="-o org.zsys:bootfs=yes"
++				[ "$(get_fs_value "$s" com.ubuntu.zsys:bootfs)" != "yes" ] && continue
++				clone_additional_parameters="-o com.ubuntu.zsys:bootfs=yes"
 +			fi
 +
  			# Clone the snapshot into its own
@@ -121,10 +121,10 @@ Index: zfs-linux-0.8.1/contrib/initramfs/scripts/zfs.in
 +	# Some datasets under ROOT/ can be mounted on top of persistent datasets
 +	# that are hosted elsewhere in the pool. Those are thus only mounted at
 +	# early boot.
-+	use_zsys=$(get_fs_value "${ZFS_BOOTFS}" org.zsys:bootfs)
++	use_zsys=$(get_fs_value "${ZFS_BOOTFS}" com.ubuntu.zsys:bootfs)
  	for fs in $filesystems $ZFS_INITRD_ADDITIONAL_DATASETS
  	do
-+		[ "$use_zsys" = "yes" -a "$(get_fs_value "$fs" org.zsys:bootfs)" != "yes" ] && continue
++		[ "$use_zsys" = "yes" -a "$(get_fs_value "$fs" com.ubuntu.zsys:bootfs)" != "yes" ] && continue
  		mount_fs "$fs"
  	done
  
