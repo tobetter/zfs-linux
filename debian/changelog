@@ -1,3 +1,9 @@
+zfs-linux (0.8.1-1ubuntu15) focal; urgency=medium
+
+  * No-change rebuild to build with python3.8.
+
+ -- Matthias Klose <doko@ubuntu.com>  Fri, 18 Oct 2019 18:28:29 +0000
+
 zfs-linux (0.8.1-1ubuntu14) eoan; urgency=medium
 
   * debian/patches/4000-zsys-support.patch:
