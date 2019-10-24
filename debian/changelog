@@ -1,3 +1,12 @@
+zfs-linux (0.8.1-1ubuntu14.1) eoan; urgency=medium
+
+  * 4600-diff_cb-does-not-handle-large-dnodes.patch
+    - fix zfs diff on snapshots with large dnodes (LP: #1849665)
+      Minor backport of upstream ZFS commit d359e99c38f667
+      ("diff_cb() does not handle large dnodes")
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 24 Oct 2019 16:07:23 +0100
+
 zfs-linux (0.8.1-1ubuntu14) eoan; urgency=medium
 
   * debian/patches/4000-zsys-support.patch:
