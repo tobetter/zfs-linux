@@ -1,3 +1,12 @@
+zfs-linux (0.8.1-1ubuntu17) focal; urgency=medium
+
+  * 4601-fix-deprecated-user_path_dir.patch
+    - fix build failure with 5.4 linux, user_path_dir() has been
+      has been deprecated, so use user_path_at_empty() instead to
+      map to the same semantics of the original.
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 1 Nov 2019 17:32:11 +0100
+
 zfs-linux (0.8.1-1ubuntu16) focal; urgency=medium
 
   * 4600-diff_cb-does-not-handle-large-dnodes.patch
