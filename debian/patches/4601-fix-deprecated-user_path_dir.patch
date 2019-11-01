@@ -1,0 +1,23 @@
+Description: Fix Linux 5.4 build failure with deprecated user_path_dir()
+  The inline helper user_path_dir() has been deprecated, so use the
+  user_path_at_empty() instead to map to the same semantics of the
+  original.
+Author: Colin Ian King <colin.king@canonical.com>
+Origin: ubuntu
+Forwarded: no
+Last-Update: 2019-11-01
+
+Index: zfs-linux-0.8.1/module/spl/spl-vnode.c
+===================================================================
+--- zfs-linux-0.8.1.orig/module/spl/spl-vnode.c
++++ zfs-linux-0.8.1/module/spl/spl-vnode.c
+@@ -680,7 +680,8 @@ vn_set_pwd(const char *filename)
+ 	saved_fs = get_fs();
+ 	set_fs(KERNEL_DS);
+ 
+-	rc = user_path_dir(filename, &path);
++	rc = user_path_at_empty(AT_FDCWD, filename,
++			LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &path, NULL);
+ 	if (rc)
+ 		goto out;
+ 

@@ -680,7 +680,8 @@ vn_set_pwd(const char *filename)
 	saved_fs = get_fs();
 	set_fs(KERNEL_DS);
 
-	rc = user_path_dir(filename, &path);
+	rc = user_path_at_empty(AT_FDCWD, filename,
+			LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &path, NULL);
 	if (rc)
 		goto out;
 
