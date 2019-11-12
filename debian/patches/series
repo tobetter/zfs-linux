@@ -1,10 +1,18 @@
 0001-Prevent-manual-builds-in-the-DKMS-source.patch
 0002-Check-for-META-and-DCH-consistency-in-autoconf.patch
 0003-relocate-zvol_wait.patch
+0010-fix-install-path-of-zpool.d-scripts.patch
 enable-zed.patch
 1004-zed-service-bindir.patch
-#init-debian-openrc-workaround.patch
+init-debian-openrc-workaround.patch
+2100-zfs-load-module.patch
+2200-add-zfs-0.6.x-ioctl-compat-shim.patch
 3100-remove-libzfs-module-timeout.patch
+3302-Use-obj-m-instead-of-subdir-m.patch
+4000-zsys-support.patch
+4500-fix-generator-invalid-cache.patch
+4501-fix-var-lib-race.patch
+4600-diff_cb-does-not-handle-large-dnodes.patch
 force-verbose-rules.patch
 #linux-5.0-simd-compat.patch # Causing #940932, see also https://github.com/zfsonlinux/zfs/issues/9346
 #Fix-CONFIG_X86_DEBUG_FPU-build-failure.patch # Contributing to #940932, see also https://github.com/zfsonlinux/zfs/issues/9346

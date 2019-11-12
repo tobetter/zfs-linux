@@ -1,3 +1,22 @@
+zfs-linux (0.8.2-3ubuntu1) focal; urgency=medium
+
+  * debian/tests/dkms-zfs-test: remove Debian dpkg-vendor check
+  * debian/tests/binary-debs-modules: remove Debian dpkg-vendor check
+  * debian/tests/binary-debs-modules-udeb: remove Debian dpkg-vendor check
+  * debian/tests/control: remove extraneous dkms testing as Ubuntu has
+    the drivers built in the kernel
+  * debian/control.udeb.in: remove zfs-modules from zfsutils-udeb Depends
+  * debian/control:
+    - zfs-initramfs: architectures: amd64 arm64 ppc64el s390
+    - zfs-initramfs: Depends: remove zfs-modules | zfs-dkms
+    - zfs-dracut: Depends: remove zfs-modules | zfs-dkms
+    - zfs-dracut: architectures: amd64 arm64 ppc64el s390
+    - zfsutils-linux: Recommends: remove zfs-modules | zfs-dkms
+    - zfs-zed: Depends: remove zfs-modules | zfs-dkms
+    - zfs-test: Depends: remove zfs-modules | zfs-dkms
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 12 Nov 2019 10:00:00 +0000
+
 zfs-linux (0.8.2-3) unstable; urgency=medium
 
   [ Aron Xu ]
