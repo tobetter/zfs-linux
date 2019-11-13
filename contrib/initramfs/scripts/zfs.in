@@ -411,7 +411,7 @@ decrypt_fs()
 
 		# Determine dataset that holds key for root dataset
 		ENCRYPTIONROOT=$(${ZFS} get -H -o value encryptionroot "${fs}")
-		DECRYPT_CMD="${ZFS} load-key '${ENCRYPTIONROOT}'"
+		DECRYPT_CMD="${ZFS} load-key ${ENCRYPTIONROOT}"
 
 		# If root dataset is encrypted...
 		if ! [ "${ENCRYPTIONROOT}" = "-" ]; then
