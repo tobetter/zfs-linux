@@ -1,0 +1,27 @@
+Description: fix double-escape in initramfs DECRYPT_CMD 
+  A double-escape is OK when the line is executed by shell, but when plymouth
+  is used it results in plymouth executing "zfs load-key 'rpool'" - and zfs
+  is unable to find pool called "'rpool'".  
+  The zfs pool name should always be 'shell-friendly', so removing the quotation
+  marks would be a proper fix for that to avoid messing up future DKMS builds,
+  the zfs installation and block manual building of the DKMS source tree.
+Author: Witold Krecicki
+Origin: ubuntu
+Forwarded: no
+Bug: https://bugs.launchpad.net/ubuntu/+source/zfs-linux/+bug/1852406
+Reviewed-By: Colin Ian King <colin.king@canonical.com>
+Last-Update: 2019-11-13
+
+diff --git a/./contrib/initramfs/scripts/zfs.in~ b/./contrib/initramfs/scripts/zfs.in
+index 3b820cd..3274a6a 100644
+--- a/./contrib/initramfs/scripts/zfs.in~
++++ b/./contrib/initramfs/scripts/zfs.in
+@@ -411,7 +411,7 @@ decrypt_fs()
+ 
+ 		# Determine dataset that holds key for root dataset
+ 		ENCRYPTIONROOT=$(${ZFS} get -H -o value encryptionroot "${fs}")
+-		DECRYPT_CMD="${ZFS} load-key '${ENCRYPTIONROOT}'"
++		DECRYPT_CMD="${ZFS} load-key ${ENCRYPTIONROOT}"
+ 
+ 		# If root dataset is encrypted...
+ 		if ! [ "${ENCRYPTIONROOT}" = "-" ]; then
