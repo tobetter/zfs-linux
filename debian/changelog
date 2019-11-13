@@ -1,3 +1,11 @@
+zfs-linux (0.8.1-1ubuntu14.2) eoan; urgency=medium
+
+  * 4601-zfs-encryptionroot-quote.patch
+    - remove quotation marks to fix zfs load-key errors in
+      plymouth when using an encrypted pool (LP: #1852406)
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 13 Nov 2019 11:21:12 +0000
+
 zfs-linux (0.8.1-1ubuntu14.1) eoan; urgency=medium
 
   * 4600-diff_cb-does-not-handle-large-dnodes.patch
