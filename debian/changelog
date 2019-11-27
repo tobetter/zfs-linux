@@ -1,3 +1,10 @@
+zfs-linux (0.8.2-3ubuntu2) focal; urgency=medium
+
+  * etc-defaults-zfs-notice.patch: fix a dpkg-source warning "unexpected 
+    end of diff" by refreshing patch
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 27 Nov 2019 15:37:23 +0000
+
 zfs-linux (0.8.2-3ubuntu1) focal; urgency=medium
 
   * debian/tests/dkms-zfs-test: remove Debian dpkg-vendor check
