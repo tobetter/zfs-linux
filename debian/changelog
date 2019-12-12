@@ -1,3 +1,13 @@
+zfs-linux (0.8.1-1ubuntu14.3) eoan; urgency=medium
+
+  * Fix livelock between ZFS evict and writeback threads (LP: #1856084)
+    - Upstream ZFS fix 41e1aa2a06f8 ("Break out of zfs_zget early if unlinked
+      znode")
+    - Upstream ZFS fix 0c46813805f4 ("Check for unlinked znodes after
+      igrab()")
+
+ -- Heitor Alves de Siqueira <halves@canonical.com>  Thu, 12 Dec 2019 13:21:35 -0300
+
 zfs-linux (0.8.1-1ubuntu14.2) eoan; urgency=medium
 
   * 4601-zfs-encryptionroot-quote.patch
