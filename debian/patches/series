@@ -70,3 +70,5 @@ enable-zed.patch
 3203-Fix-zpool-create-t-tempname.patch
 3204-Fix-zfs-build-error-with-tracepoints-enabled.patch
 3205-Fix-hung-z_zvol-tasks-during-zfs-receive.patch
+3206-Break-out-of-zfs_zget-early-if-unlinked-znode.patch
+3207-Check-for-unlinked-znodes-after-igrab.patch
