@@ -32,4 +32,5 @@ dist_pkgdata_SCRIPTS = \
 	zpool_create_features_003_pos.ksh \
 	zpool_create_features_004_neg.ksh \
 	zpool_create_features_005_pos.ksh \
-	create-o_ashift.ksh
+	create-o_ashift.ksh \
+	zpool_create_tempname.ksh
