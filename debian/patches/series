@@ -42,3 +42,5 @@ enable-zed.patch
 3302-linux-5-0-disable-vector-instructions-on-5-0-kernels.patch
 3303-linux-5-0-convert-ms-macros-to-sb.patch
 3304-linux-5-0-fix-bio-set-dev.patch
+3206-Break-out-of-zfs_zget-early-if-unlinked-znode.patch
+3207-Check-for-unlinked-znodes-after-igrab.patch
