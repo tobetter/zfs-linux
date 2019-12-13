@@ -1,3 +1,13 @@
+zfs-linux (0.8.2-3ubuntu3) focal; urgency=medium
+
+  * Fix livelock between ZFS evict and writeback threads (LP: #1856084)
+    - Upstream ZFS fix 41e1aa2a06f8 ("Break out of zfs_zget early if unlinked
+      znode")
+    - Upstream ZFS fix 0c46813805f4 ("Check for unlinked znodes after
+      igrab()")
+
+ -- Heitor Alves de Siqueira <halves@canonical.com>  Fri, 13 Dec 2019 11:27:39 -0300
+
 zfs-linux (0.8.2-3ubuntu2) focal; urgency=medium
 
   * etc-defaults-zfs-notice.patch: fix a dpkg-source warning "unexpected 
