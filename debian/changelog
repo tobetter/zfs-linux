@@ -1,3 +1,11 @@
+zfs-linux (0.8.2-3ubuntu4) focal; urgency=medium
+
+  * debian/patches/initramfs-setup-keymapping-and-video-for-
+    prompts.patch: initramfs: setup keymapping and video for prompts. 
+    Thanks to Richard Laager <rlaager@wiktel.com>.  Closes LP: #1856408.
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Mon, 16 Dec 2019 09:42:52 -0800
+
 zfs-linux (0.8.2-3ubuntu3) focal; urgency=medium
 
   * Fix livelock between ZFS evict and writeback threads (LP: #1856084)
