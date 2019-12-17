@@ -133,14 +133,17 @@ vdev_elevator_switch(vdev_t *v, char *elevator)
 	if (!v->vdev_wholedisk && strncmp(device, "dm-", 3) != 0)
 		return (0);
 
-	/* Skip devices without schedulers (loop, ram, dm, etc) */
-	if (!q->elevator || !blk_queue_stackable(q))
-		return (0);
-
 	/* Leave existing scheduler when set to "none" */
 	if ((strncmp(elevator, "none", 4) == 0) && (strlen(elevator) == 4))
 		return (0);
 
+	/*
+	 * The elevator_change() function was available in kernels from
+	 * 2.6.36 to 4.11.  When not available fall back to using the user
+	 * mode helper functionality to set the elevator via sysfs.  This
+	 * requires /bin/echo and sysfs to be mounted which may not be true
+	 * early in the boot process.
+	 */
 #ifdef HAVE_ELEVATOR_CHANGE
 	error = elevator_change(q, elevator);
 #else
@@ -165,10 +168,10 @@ vdev_elevator_switch(vdev_t *v, char *elevator)
 		strfree(argv[2]);
 	}
 #endif /* HAVE_ELEVATOR_CHANGE */
-	if (error)
-		printk("ZFS: Unable to set \"%s\" scheduler for %s (%s): %d\n",
+	if (error) {
+		zfs_dbgmsg("Unable to set \"%s\" scheduler for %s (%s): %d\n",
 		    elevator, v->vdev_path, device, error);
-
+	}
 	return (error);
 }
 
