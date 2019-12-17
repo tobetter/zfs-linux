@@ -272,7 +272,7 @@ zfs_znode_hold_enter(zfsvfs_t *zfsvfs, uint64_t obj)
 		ASSERT3U(zh->zh_obj, ==, obj);
 		found = B_TRUE;
 	}
-	refcount_add(&zh->zh_refcount, NULL);
+	zfs_refcount_add(&zh->zh_refcount, NULL);
 	mutex_exit(&zfsvfs->z_hold_locks[i]);
 
 	if (found == B_TRUE)
@@ -700,7 +700,7 @@ zfs_mknode(znode_t *dzp, vattr_t *vap, dmu_tx_t *tx, cred_t *cr,
 	uint64_t	rdev = 0;
 	zfsvfs_t	*zfsvfs = ZTOZSB(dzp);
 	dmu_buf_t	*db;
-	timestruc_t	now;
+	inode_timespec_t now;
 	uint64_t	gen, obj;
 	int		bonuslen;
 	int		dnodesize;
@@ -1359,7 +1359,7 @@ void
 zfs_tstamp_update_setup(znode_t *zp, uint_t flag, uint64_t mtime[2],
     uint64_t ctime[2])
 {
-	timestruc_t	now;
+	inode_timespec_t now;
 
 	gethrestime(&now);
 

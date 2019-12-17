@@ -3157,7 +3157,7 @@ top:
 
 	if (mask & (ATTR_MTIME | ATTR_SIZE)) {
 		ZFS_TIME_ENCODE(&vap->va_mtime, mtime);
-		ZTOI(zp)->i_mtime = timespec_trunc(vap->va_mtime,
+		ZTOI(zp)->i_mtime = zpl_inode_timespec_trunc(vap->va_mtime,
 		    ZTOI(zp)->i_sb->s_time_gran);
 
 		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs), NULL,
@@ -3166,7 +3166,7 @@ top:
 
 	if (mask & (ATTR_CTIME | ATTR_SIZE)) {
 		ZFS_TIME_ENCODE(&vap->va_ctime, ctime);
-		ZTOI(zp)->i_ctime = timespec_trunc(vap->va_ctime,
+		ZTOI(zp)->i_ctime = zpl_inode_timespec_trunc(vap->va_ctime,
 		    ZTOI(zp)->i_sb->s_time_gran);
 		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
 		    ctime, sizeof (ctime));
@@ -4213,8 +4213,10 @@ zfs_putpage(struct inode *ip, struct page *pp, struct writeback_control *wbc)
 		unlock_page(pp);
 		zfs_range_unlock(rl);
 
-		if (wbc->sync_mode != WB_SYNC_NONE)
-			wait_on_page_writeback(pp);
+		if (wbc->sync_mode != WB_SYNC_NONE) {
+			if (PageWriteback(pp))
+				wait_on_page_bit(pp, PG_writeback);
+		}
 
 		ZFS_EXIT(zfsvfs);
 		return (0);

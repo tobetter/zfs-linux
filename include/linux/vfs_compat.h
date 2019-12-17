@@ -308,9 +308,13 @@ zpl_posix_acl_release(struct posix_acl *acl)
 {
 	if ((acl == NULL) || (acl == ACL_NOT_CACHED))
 		return;
-
+#ifdef HAVE_ACL_REFCOUNT
+	if (refcount_dec_and_test(&acl->a_refcount))
+		zpl_posix_acl_release_impl(acl);
+#else
 	if (atomic_dec_and_test(&acl->a_refcount))
 		zpl_posix_acl_release_impl(acl);
+#endif
 }
 #endif /* HAVE_POSIX_ACL_RELEASE */
 
@@ -599,6 +603,20 @@ static inline struct timespec
 current_time(struct inode *ip)
 {
 	return (timespec_trunc(current_kernel_time(), ip->i_sb->s_time_gran));
+}
+#endif
+
+/*
+ * 4.16 API change
+ * Added iversion interface for managing inode version field.
+ */
+#ifdef HAVE_INODE_SET_IVERSION
+#include <linux/iversion.h>
+#else
+static inline void
+inode_set_iversion(struct inode *ip, u64 val)
+{
+	ip->i_version = val;
 }
 #endif
 

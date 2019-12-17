@@ -1,0 +1,104 @@
+From 1c38ac61e1dbc876eb4079a69f965bb51635fef7 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Tue, 19 Jun 2018 21:52:45 -0700
+Subject: [PATCH] Linux 4.14 compat: blk_queue_stackable()
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+The blk_queue_stackable() function was replaced in the 4.14 kernel
+by queue_is_rq_based(), commit torvalds/linux@5fdee212.  This change
+resulted in the default elevator being used which can negatively
+impact performance.
+
+Rather than adding additional compatibility code to detect the
+new interface unconditionally attempt to set the elevator.  Since
+we expect this to fail for block devices without an elevator the
+error message has been moved in to zfs_dbgmsg().
+
+Finally, it was observed that the elevator_change() was removed
+from the 4.12 kernel, commit torvalds/linux@c033269.  Update the
+comment to clearly specify which are expected to export the
+elevator_change() symbol.
+
+Reviewed-by: Matthew Ahrens <mahrens@delphix.com>
+Reviewed-by: Tony Hutter <hutter2@llnl.gov>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Closes #7645
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/config/kernel-elevator-change.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/kernel-elevator-change.m4
++++ zfs-linux-0.7.5/config/kernel-elevator-change.m4
+@@ -1,6 +1,6 @@
+ dnl #
+-dnl # 2.6.36 API change
+-dnl # Verify the elevator_change() symbol is available.
++dnl # 2.6.36 API, exported elevator_change() symbol
++dnl # 4.12 API, removed elevator_change() symbol
+ dnl #
+ AC_DEFUN([ZFS_AC_KERNEL_ELEVATOR_CHANGE], [
+ 	AC_MSG_CHECKING([whether elevator_change() is available])
+Index: zfs-linux-0.7.5/include/linux/blkdev_compat.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/linux/blkdev_compat.h
++++ zfs-linux-0.7.5/include/linux/blkdev_compat.h
+@@ -105,17 +105,6 @@ blk_queue_set_write_cache(struct request
+ #endif
+ 
+ /*
+- * 2.6.27 API change,
+- * The blk_queue_stackable() queue flag was added in 2.6.27 to handle dm
+- * stacking drivers.  Prior to this request stacking drivers were detected
+- * by checking (q->request_fn == NULL), for earlier kernels we revert to
+- * this legacy behavior.
+- */
+-#ifndef blk_queue_stackable
+-#define	blk_queue_stackable(q)	((q)->request_fn == NULL)
+-#endif
+-
+-/*
+  * 2.6.34 API change,
+  * The blk_queue_max_hw_sectors() function replaces blk_queue_max_sectors().
+  */
+Index: zfs-linux-0.7.5/module/zfs/vdev_disk.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/vdev_disk.c
++++ zfs-linux-0.7.5/module/zfs/vdev_disk.c
+@@ -133,14 +133,17 @@ vdev_elevator_switch(vdev_t *v, char *el
+ 	if (!v->vdev_wholedisk && strncmp(device, "dm-", 3) != 0)
+ 		return (0);
+ 
+-	/* Skip devices without schedulers (loop, ram, dm, etc) */
+-	if (!q->elevator || !blk_queue_stackable(q))
+-		return (0);
+-
+ 	/* Leave existing scheduler when set to "none" */
+ 	if ((strncmp(elevator, "none", 4) == 0) && (strlen(elevator) == 4))
+ 		return (0);
+ 
++	/*
++	 * The elevator_change() function was available in kernels from
++	 * 2.6.36 to 4.11.  When not available fall back to using the user
++	 * mode helper functionality to set the elevator via sysfs.  This
++	 * requires /bin/echo and sysfs to be mounted which may not be true
++	 * early in the boot process.
++	 */
+ #ifdef HAVE_ELEVATOR_CHANGE
+ 	error = elevator_change(q, elevator);
+ #else
+@@ -165,10 +168,10 @@ vdev_elevator_switch(vdev_t *v, char *el
+ 		strfree(argv[2]);
+ 	}
+ #endif /* HAVE_ELEVATOR_CHANGE */
+-	if (error)
+-		printk("ZFS: Unable to set \"%s\" scheduler for %s (%s): %d\n",
++	if (error) {
++		zfs_dbgmsg("Unable to set \"%s\" scheduler for %s (%s): %d\n",
+ 		    elevator, v->vdev_path, device, error);
+-
++	}
+ 	return (error);
+ }
+ 

@@ -209,7 +209,7 @@ typedef struct znode_hold {
 	uint64_t	zh_obj;		/* object id */
 	kmutex_t	zh_lock;	/* lock serializing object access */
 	avl_node_t	zh_node;	/* avl tree linkage */
-	refcount_t	zh_refcount;	/* active consumer reference count */
+	zfs_refcount_t	zh_refcount;	/* active consumer reference count */
 } znode_hold_t;
 
 /*
@@ -270,19 +270,35 @@ typedef struct znode_hold {
 
 extern unsigned int zfs_object_mutex_size;
 
-/* Encode ZFS stored time values from a struct timespec */
+/* Encode ZFS stored time values from a struct timespec / struct timespec64. */
 #define	ZFS_TIME_ENCODE(tp, stmp)		\
-{						\
+do {						\
 	(stmp)[0] = (uint64_t)(tp)->tv_sec;	\
 	(stmp)[1] = (uint64_t)(tp)->tv_nsec;	\
-}
+} while (0)
 
-/* Decode ZFS stored time values to a struct timespec */
+
+#if defined(HAVE_INODE_TIMESPEC64_TIMES)
+/*
+ * Decode ZFS stored time values to a struct timespec64
+ * 4.18 and newer kernels.
+ */
 #define	ZFS_TIME_DECODE(tp, stmp)		\
-{						\
-	(tp)->tv_sec = (time_t)(stmp)[0];		\
-	(tp)->tv_nsec = (long)(stmp)[1];		\
-}
+do {						\
+	(tp)->tv_sec = (time64_t)(stmp)[0];	\
+	(tp)->tv_nsec = (long)(stmp)[1];	\
+} while (0)
+#else
+/*
+ * Decode ZFS stored time values to a struct timespec
+ * 4.17 and older kernels.
+ */
+#define	ZFS_TIME_DECODE(tp, stmp)		\
+do {						\
+	(tp)->tv_sec = (time_t)(stmp)[0];	\
+	(tp)->tv_nsec = (long)(stmp)[1];	\
+} while (0)
+#endif /* HAVE_INODE_TIMESPEC64_TIMES */
 
 /*
  * Timestamp defines

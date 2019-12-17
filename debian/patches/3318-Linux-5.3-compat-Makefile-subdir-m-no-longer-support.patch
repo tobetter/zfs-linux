@@ -1,0 +1,74 @@
+From ff4b68eedc307e6e9b7f3890b809cbb0e9d73856 Mon Sep 17 00:00:00 2001
+From: Dominic Pearson <dsp@technoanimal.net>
+Date: Tue, 20 Aug 2019 00:22:52 +0200
+Subject: [PATCH] Linux 5.3 compat: Makefile subdir-m no longer supported
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Uses obj-m instead, due to kernel changes.
+
+See LKML: Masahiro Yamada, Tue, 6 Aug 2019 19:03:23 +0900
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Reviewed-by: Tony Hutter <hutter2@llnl.gov>
+Signed-off-by: Dominic Pearson <dsp@technoanimal.net>
+Closes #9169
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/.gitignore
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/.gitignore
+@@ -0,0 +1,11 @@
++#
++# Module leftovers
++#
++/module/avl/zavl.mod
++/module/icp/icp.mod
++/module/lua/zlua.mod
++/module/nvpair/znvpair.mod
++/module/spl/spl.mod
++/module/unicode/zunicode.mod
++/module/zcommon/zcommon.mod
++/module/zfs/zfs.mod
+Index: zfs-linux-0.7.5/module/Makefile.in
+===================================================================
+--- zfs-linux-0.7.5.orig/module/Makefile.in
++++ zfs-linux-0.7.5/module/Makefile.in
+@@ -1,10 +1,10 @@
+-subdir-m += avl
+-subdir-m += nvpair
+-subdir-m += unicode
+-subdir-m += zcommon
+-subdir-m += zfs
+-subdir-m += zpios
+-subdir-m += icp
++obj-y += avl/
++obj-y += nvpair/
++obj-y += unicode/
++obj-y += zcommon/
++obj-y += zfs/
++obj-y += zpios/
++obj-y += icp/
+ 
+ INSTALL_MOD_DIR ?= extra
+ 
+@@ -66,13 +66,13 @@ modules_install:
+ modules_uninstall:
+ 	@# Uninstall the kernel modules
+ 	kmoddir=$(DESTDIR)$(INSTALL_MOD_PATH)/lib/modules/@LINUX_VERSION@
+-	list='$(subdir-m)'; for subdir in $$list; do \
+-		$(RM) -R $$kmoddir/$(INSTALL_MOD_DIR)/$$subdir; \
++	list='$(obj-y)'; for objdir in $$list; do \
++		$(RM) -R $$kmoddir/$(INSTALL_MOD_DIR)/$$objdir; \
+ 	done
+ 
+ distdir:
+-	list='$(subdir-m)'; for subdir in $$list; do \
+-		(cd @top_srcdir@/module && find $$subdir -name '*.c' -o -name '*.h' -o -name '*.S' |\
++	list='$(obj-y)'; for objdir in $$list; do \
++		(cd @top_srcdir@/module && find $$objdir -name '*.c' -o -name '*.h' -o -name '*.S' |\
+ 		xargs cp --parents -t $$distdir); \
+ 	done
+ 

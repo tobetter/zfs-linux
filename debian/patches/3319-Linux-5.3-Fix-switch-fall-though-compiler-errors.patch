@@ -1,0 +1,56 @@
+From a9ebdfdd43204b8f907c5395cd68b2d745544730 Mon Sep 17 00:00:00 2001
+From: Tony Hutter <hutter2@llnl.gov>
+Date: Wed, 21 Aug 2019 09:29:23 -0700
+Subject: [PATCH] Linux 5.3: Fix switch() fall though compiler errors
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Fix some switch() fall-though compiler errors:
+
+    abd.c:1504:9: error: this statement may fall through
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Tony Hutter <hutter2@llnl.gov>
+Closes #9170
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/module/zfs/abd.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/abd.c
++++ zfs-linux-0.7.5/module/zfs/abd.c
+@@ -1349,8 +1349,10 @@ abd_raidz_gen_iterate(abd_t **cabds, abd
+ 		switch (parity) {
+ 			case 3:
+ 				len = MIN(caiters[2].iter_mapsize, len);
++				/* falls through */
+ 			case 2:
+ 				len = MIN(caiters[1].iter_mapsize, len);
++				/* falls through */
+ 			case 1:
+ 				len = MIN(caiters[0].iter_mapsize, len);
+ 		}
+@@ -1440,9 +1442,11 @@ abd_raidz_rec_iterate(abd_t **cabds, abd
+ 			case 3:
+ 				len = MIN(xiters[2].iter_mapsize, len);
+ 				len = MIN(citers[2].iter_mapsize, len);
++				/* falls through */
+ 			case 2:
+ 				len = MIN(xiters[1].iter_mapsize, len);
+ 				len = MIN(citers[1].iter_mapsize, len);
++				/* falls through */
+ 			case 1:
+ 				len = MIN(xiters[0].iter_mapsize, len);
+ 				len = MIN(citers[0].iter_mapsize, len);
+Index: zfs-linux-0.7.5/module/zfs/vdev_raidz_math_scalar.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/vdev_raidz_math_scalar.c
++++ zfs-linux-0.7.5/module/zfs/vdev_raidz_math_scalar.c
+@@ -142,6 +142,7 @@ static const struct {
+ 		a.b[6] = mul_lt[a.b[6]];				\
+ 		a.b[5] = mul_lt[a.b[5]];				\
+ 		a.b[4] = mul_lt[a.b[4]];				\
++		/* falls through */					\
+ 	case 4:								\
+ 		a.b[3] = mul_lt[a.b[3]];				\
+ 		a.b[2] = mul_lt[a.b[2]];				\

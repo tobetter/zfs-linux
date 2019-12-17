@@ -34,6 +34,7 @@
 #include <sys/fs/zfs.h>
 #include <sys/zio.h>
 #include <sys/sunldi.h>
+#include <linux/vfs_compat.h>
 
 char *zfs_vdev_scheduler = VDEV_SCHEDULER;
 static void *zfs_vdev_holder = VDEV_HOLDER;
@@ -75,7 +76,7 @@ vdev_bdev_mode(int smode)
 	ASSERT3S(smode & (FREAD | FWRITE), !=, 0);
 
 	if ((smode & FREAD) && !(smode & FWRITE))
-		mode = MS_RDONLY;
+		mode = SB_RDONLY;
 
 	return (mode);
 }
@@ -133,14 +134,17 @@ vdev_elevator_switch(vdev_t *v, char *elevator)
 	if (!v->vdev_wholedisk && strncmp(device, "dm-", 3) != 0)
 		return (0);
 
-	/* Skip devices without schedulers (loop, ram, dm, etc) */
-	if (!q->elevator || !blk_queue_stackable(q))
-		return (0);
-
 	/* Leave existing scheduler when set to "none" */
 	if ((strncmp(elevator, "none", 4) == 0) && (strlen(elevator) == 4))
 		return (0);
 
+	/*
+	 * The elevator_change() function was available in kernels from
+	 * 2.6.36 to 4.11.  When not available fall back to using the user
+	 * mode helper functionality to set the elevator via sysfs.  This
+	 * requires /bin/echo and sysfs to be mounted which may not be true
+	 * early in the boot process.
+	 */
 #ifdef HAVE_ELEVATOR_CHANGE
 	error = elevator_change(q, elevator);
 #else
@@ -165,10 +169,10 @@ vdev_elevator_switch(vdev_t *v, char *elevator)
 		strfree(argv[2]);
 	}
 #endif /* HAVE_ELEVATOR_CHANGE */
-	if (error)
-		printk("ZFS: Unable to set \"%s\" scheduler for %s (%s): %d\n",
+	if (error) {
+		zfs_dbgmsg("Unable to set \"%s\" scheduler for %s (%s): %d\n",
 		    elevator, v->vdev_path, device, error);
-
+	}
 	return (error);
 }
 
@@ -498,13 +502,37 @@ vdev_submit_bio_impl(struct bio *bio)
 #endif
 }
 
-#ifndef HAVE_BIO_SET_DEV
+#ifdef HAVE_BIO_SET_DEV
+#if defined(CONFIG_BLK_CGROUP) && defined(HAVE_BIO_SET_DEV_GPL_ONLY)
+/*
+ * The Linux 5.0 kernel updated the bio_set_dev() macro so it calls the
+ * GPL-only bio_associate_blkg() symbol thus inadvertently converting
+ * the entire macro.  Provide a minimal version which always assigns the
+ * request queue's root_blkg to the bio.
+ */
+static inline void
+vdev_bio_associate_blkg(struct bio *bio)
+{
+	struct request_queue *q = bio->bi_disk->queue;
+
+	ASSERT3P(q, !=, NULL);
+	ASSERT3P(bio->bi_blkg, ==, NULL);
+
+	if (blkg_tryget(q->root_blkg))
+		bio->bi_blkg = q->root_blkg;
+}
+#define	bio_associate_blkg	vdev_bio_associate_blkg
+#endif
+#else
+/*
+ * Provide a bio_set_dev() helper macro for pre-Linux 4.14 kernels.
+ */
 static inline void
 bio_set_dev(struct bio *bio, struct block_device *bdev)
 {
 	bio->bi_bdev = bdev;
 }
-#endif /* !HAVE_BIO_SET_DEV */
+#endif /* HAVE_BIO_SET_DEV */
 
 static inline void
 vdev_submit_bio(struct bio *bio)

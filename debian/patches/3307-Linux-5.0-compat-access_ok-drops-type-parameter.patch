@@ -1,0 +1,77 @@
+From 77e50c3070a0009c4ed8b50dbb7cf0df48bdda90 Mon Sep 17 00:00:00 2001
+From: Tony Hutter <hutter2@llnl.gov>
+Date: Thu, 10 Jan 2019 11:03:40 -0800
+Subject: [PATCH] Linux 5.0 compat: access_ok() drops 'type' parameter
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+access_ok no longer needs a 'type' parameter in the 5.0 kernel.
+
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Tony Hutter <hutter2@llnl.gov>
+Closes #8261
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/config/kernel-access-ok-type.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/config/kernel-access-ok-type.m4
+@@ -0,0 +1,21 @@
++dnl #
++dnl # Linux 5.0: access_ok() drops 'type' parameter:
++dnl #
++dnl # - access_ok(type, addr, size)
++dnl # + access_ok(addr, size)
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_ACCESS_OK_TYPE], [
++	AC_MSG_CHECKING([whether access_ok() has 'type' parameter])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/uaccess.h>
++	],[
++		const void __user __attribute__((unused)) *addr = (void *) 0xdeadbeef;
++		unsigned long __attribute__((unused)) size = 1;
++		int error __attribute__((unused)) = access_ok(0, addr, size);
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_ACCESS_OK_TYPE, 1, [kernel has access_ok with 'type' parameter])
++	],[
++		AC_MSG_RESULT(no)
++	])
++])
+Index: zfs-linux-0.7.5/config/kernel.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/kernel.m4
++++ zfs-linux-0.7.5/config/kernel.m4
+@@ -5,6 +5,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL
+ 	ZFS_AC_SPL
+ 	ZFS_AC_QAT
++	ZFS_AC_KERNEL_ACCESS_OK_TYPE
+ 	ZFS_AC_TEST_MODULE
+ 	ZFS_AC_KERNEL_OBJTOOL
+ 	ZFS_AC_KERNEL_CONFIG
+Index: zfs-linux-0.7.5/include/linux/kmap_compat.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/linux/kmap_compat.h
++++ zfs-linux-0.7.5/include/linux/kmap_compat.h
+@@ -27,6 +27,7 @@
+ #define	_ZFS_KMAP_H
+ 
+ #include <linux/highmem.h>
++#include <linux/uaccess.h>
+ 
+ #ifdef HAVE_1ARG_KMAP_ATOMIC
+ /* 2.6.37 API change */
+@@ -37,4 +38,11 @@
+ #define	zfs_kunmap_atomic(addr, km_type)	kunmap_atomic(addr, km_type)
+ #endif
+ 
++/* 5.0 API change - no more 'type' argument for access_ok() */
++#ifdef HAVE_ACCESS_OK_TYPE
++#define	zfs_access_ok(type, addr, size) access_ok(type, addr, size)
++#else
++#define	zfs_access_ok(type, addr, size) access_ok(addr, size)
++#endif
++
+ #endif	/* _ZFS_KMAP_H */
