@@ -1,0 +1,29 @@
+From c12ea778654778f2039369323e8875e71d3a5609 Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Mon, 29 Apr 2019 18:20:21 -0700
+Subject: [PATCH] Linux 5.0 compat: Remove incorrect ASSERT
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Not all block devices, notably scsi_debug, set a root_blkg on the
+request queue.  Remove this assertion and allow the the existing
+call to blkg_tryget() to gracefully handle the NULL (which it does).
+
+Reviewed-by: Tomohiro Kusumi <kusumi.tomohiro@gmail.com>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Closes #8678
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/module/zfs/vdev_disk.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/vdev_disk.c
++++ zfs-linux-0.7.5/module/zfs/vdev_disk.c
+@@ -516,7 +516,6 @@ vdev_bio_associate_blkg(struct bio *bio)
+ 	struct request_queue *q = bio->bi_disk->queue;
+ 
+ 	ASSERT3P(q, !=, NULL);
+-	ASSERT3P(q->root_blkg, !=, NULL);
+ 	ASSERT3P(bio->bi_blkg, ==, NULL);
+ 
+ 	if (blkg_tryget(q->root_blkg))

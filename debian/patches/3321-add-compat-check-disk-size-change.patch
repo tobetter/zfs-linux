@@ -1,0 +1,56 @@
+From: Colin Ian King <colin.king@canonical.com>
+Date: Tue, 17 Dec 2019 09:20:11 +0000
+Subject: [PATCH] add compat check_disk_size_change
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+check_disk_size_change is not longer a linkable symbol in
+recent kernels so supply a more minimal zvol equivalent.
+
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/module/zfs/zvol.c
+===================================================================
+--- zfs-linux-0.7.5.orig/module/zfs/zvol.c
++++ zfs-linux-0.7.5/module/zfs/zvol.c
+@@ -339,6 +339,30 @@ zvol_get_stats(objset_t *os, nvlist_t *n
+ 	return (SET_ERROR(error));
+ }
+ 
++static void zvol_flush_disk(struct block_device *bdev, bool kill_dirty)
++{
++	__invalidate_device(bdev, kill_dirty);
++        if (!bdev->bd_disk)
++                return;
++        if (disk_part_scan_enabled(bdev->bd_disk))
++                bdev->bd_invalidated = 1;
++
++}
++
++static void
++zvol_check_disk_size_change(struct gendisk *disk, struct block_device *bdev)
++{
++	loff_t disk_size, bdev_size;
++
++	disk_size = (loff_t)get_capacity(disk) << 9;
++	bdev_size = i_size_read(bdev->bd_inode);
++	if (disk_size != bdev_size) {
++		i_size_write(bdev->bd_inode, disk_size);
++		if (bdev_size > disk_size)
++			zvol_flush_disk(bdev, false);
++	}
++}
++
+ static void
+ zvol_size_changed(zvol_state_t *zv, uint64_t volsize)
+ {
+@@ -352,7 +376,7 @@ zvol_size_changed(zvol_state_t *zv, uint
+ 
+ 	set_capacity(zv->zv_disk, volsize >> 9);
+ 	zv->zv_volsize = volsize;
+-	check_disk_size_change(zv->zv_disk, bdev);
++	zvol_check_disk_size_change(zv->zv_disk, bdev);
+ 
+ 	bdput(bdev);
+ }

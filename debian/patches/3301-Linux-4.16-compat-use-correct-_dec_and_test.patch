@@ -1,0 +1,74 @@
+From a5369b61a24cf75d8188af8ee554123cf7fae14c Mon Sep 17 00:00:00 2001
+From: Tony Hutter <hutter2@llnl.gov>
+Date: Thu, 22 Feb 2018 09:02:06 -0800
+Subject: [PATCH] Linux 4.16 compat: use correct *_dec_and_test()
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Use refcount_dec_and_test() on 4.16+ kernels, atomic_dec_and_test()
+on older kernels.  https://lwn.net/Articles/714974/
+
+Reviewed-by: Giuseppe Di Natale <dinatale2@llnl.gov>
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Tony Hutter <hutter2@llnl.gov>
+Closes: #7179
+Closes: #7211
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/config/kernel.m4
+===================================================================
+--- zfs-linux-0.7.5.orig/config/kernel.m4
++++ zfs-linux-0.7.5/config/kernel.m4
+@@ -124,6 +124,7 @@ AC_DEFUN([ZFS_AC_CONFIG_KERNEL], [
+ 	ZFS_AC_KERNEL_HAVE_GENERIC_SETXATTR
+ 	ZFS_AC_KERNEL_CURRENT_TIME
+ 	ZFS_AC_KERNEL_VM_NODE_STAT
++	ZFS_AC_KERNEL_ACL_HAS_REFCOUNT
+ 	ZFS_AC_KERNEL_USERNS_CAPABILITIES
+ 
+ 	AS_IF([test "$LINUX_OBJ" != "$LINUX"], [
+Index: zfs-linux-0.7.5/config/kernel-acl-refcount.m4
+===================================================================
+--- /dev/null
++++ zfs-linux-0.7.5/config/kernel-acl-refcount.m4
+@@ -0,0 +1,20 @@
++dnl #
++dnl # 4.16 kernel: check if struct posix_acl acl.a_refcount is a refcount_t.
++dnl # It's an atomic_t on older kernels.
++dnl #
++AC_DEFUN([ZFS_AC_KERNEL_ACL_HAS_REFCOUNT], [
++	AC_MSG_CHECKING([whether posix_acl has refcount_t])
++	ZFS_LINUX_TRY_COMPILE([
++		#include <linux/backing-dev.h>
++		#include <linux/refcount.h>
++		#include <linux/posix_acl.h>
++	],[
++		struct posix_acl acl;
++		refcount_t *r __attribute__ ((unused)) = &acl.a_refcount;
++	],[
++		AC_MSG_RESULT(yes)
++		AC_DEFINE(HAVE_ACL_REFCOUNT, 1, [posix_acl has refcount_t])
++	],[
++		AC_MSG_RESULT(no)
++	])
++])
+Index: zfs-linux-0.7.5/include/linux/vfs_compat.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/linux/vfs_compat.h
++++ zfs-linux-0.7.5/include/linux/vfs_compat.h
+@@ -308,9 +308,13 @@ zpl_posix_acl_release(struct posix_acl *
+ {
+ 	if ((acl == NULL) || (acl == ACL_NOT_CACHED))
+ 		return;
+-
++#ifdef HAVE_ACL_REFCOUNT
++	if (refcount_dec_and_test(&acl->a_refcount))
++		zpl_posix_acl_release_impl(acl);
++#else
+ 	if (atomic_dec_and_test(&acl->a_refcount))
+ 		zpl_posix_acl_release_impl(acl);
++#endif
+ }
+ #endif /* HAVE_POSIX_ACL_RELEASE */
+ 

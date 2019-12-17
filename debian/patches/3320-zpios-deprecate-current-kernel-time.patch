@@ -1,0 +1,31 @@
+From: Colin Ian King <colin.king@canonical.com>
+Date: Tue, 17 Dec 2019 09:10:11 +0000
+Subject: [PATCH] zpios deprecate current_kernel_time
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Use getnstimeofday instead of deprecated current_kernel_time
+
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+
+Index: zfs-linux-0.7.5/include/zpios-ctl.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/zpios-ctl.h
++++ zfs-linux-0.7.5/include/zpios-ctl.h
+@@ -181,11 +181,11 @@ zpios_timespec_t
+ zpios_timespec_now(void)
+ {
+ 	zpios_timespec_t zts_now;
+-	struct timespec ts_now;
++	struct timespec ts;
+ 
+-	ts_now = current_kernel_time();
+-	zts_now.ts_sec  = ts_now.tv_sec;
+-	zts_now.ts_nsec = ts_now.tv_nsec;
++	getnstimeofday(&ts);
++	zts_now.ts_sec = ts.tv_sec;
++	zts_now.ts_nsec = ts.tv_nsec;
+ 
+ 	return (zts_now);
+ }
