@@ -20,3 +20,9 @@ etc-defaults-zfs-notice.patch
 3206-Break-out-of-zfs_zget-early-if-unlinked-znode.patch
 3207-Check-for-unlinked-znodes-after-igrab.patch
 initramfs-setup-keymapping-and-video-for-prompts.patch 
+4700-Linux-5.0-compat-SIMD-compatibility.patch
+4701-Perform-KABI-checks-in-parallel.patch
+4702-Fix-CONFIG_X86_DEBUG_FPU-build-failure.patch
+4703-Enable-SIMD-for-encryption.patch
+4704-OpenZFS-restructuring-move-platform-specific-headers.patch
+4705-Linux-4.14-4.19-5.0-compat-SIMD-save-restore.patch
