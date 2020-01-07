@@ -1,3 +1,18 @@
+zfs-linux (0.8.2-3ubuntu5) focal; urgency=medium
+
+  * Add support for for hardware-accelerated encryption (LP: #1857040)
+    and include faster KABI checks and restructuring backports to
+    ease the backporting effort.
+    Backport of upstream ZFS commits:
+    - e5db31349484 "Linux 5.0 compat: SIMD compatibility"
+    - 608f8749a105 "Perform KABI checks in parallel"
+    - 095b5412b31c "Fix CONFIG_X86_DEBUG_FPU build failure"
+    - b88ca2acf512 "Enable SIMD for encryption"
+    - 006e9a408824 "OpenZFS restructuring - move platform specific headers"
+    - 10fa254539ec "Linux 4.14, 4.19, 5.0+ compat: SIMD save/restore"
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 7 Jan 2020 20:02:20 +0000
+
 zfs-linux (0.8.2-3ubuntu4) focal; urgency=medium
 
   * debian/patches/initramfs-setup-keymapping-and-video-for-

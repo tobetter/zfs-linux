@@ -1,0 +1,1094 @@
+From 10fa254539ec41c6b043785d4e7ab34bce383b9f Mon Sep 17 00:00:00 2001
+From: Brian Behlendorf <behlendorf1@llnl.gov>
+Date: Thu, 24 Oct 2019 10:17:33 -0700
+Subject: [PATCH] Linux 4.14, 4.19, 5.0+ compat: SIMD save/restore
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Contrary to initial testing we cannot rely on these kernels to
+invalidate the per-cpu FPU state and restore the FPU registers.
+Nor can we guarantee that the kernel won't modify the FPU state
+which we saved in the task struck.
+
+Therefore, the kfpu_begin() and kfpu_end() functions have been
+updated to save and restore the FPU state using our own dedicated
+per-cpu FPU state variables.
+
+This has the additional advantage of allowing us to use the FPU
+again in user threads.  So we remove the code which was added to
+use task queues to ensure some functions ran in kernel threads.
+
+Reviewed-by: Fabian Grünbichler <f.gruenbichler@proxmox.com>
+Reviewed-by: Tony Hutter <hutter2@llnl.gov>
+Signed-off-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Issue #9346
+Closes #9403
+---
+ config/kernel-fpu.m4                         |  80 ++++----
+ include/linux/simd.h                         |   3 +-
+ include/linux/simd_aarch64.h                 |   6 +-
+ include/linux/simd_x86.h                     | 197 ++++++++++++++-----
+ include/sys/zio_crypt.h                      |  14 +-
+ lib/libspl/include/sys/simd.h                |   3 +-
+ module/icp/algs/aes/aes_impl.c               |   3 +-
+ module/icp/algs/modes/gcm.c                  |   3 +-
+ module/icp/include/aes/aes_impl.h            |   2 +-
+ module/icp/include/modes/gcm_impl.h          |   2 +-
+ module/icp/io/aes.c                          |  32 +--
+ module/spl/spl-taskq.c                       |   2 -
+ module/spl/spl-thread.c                      |   2 -
+ module/zfs/zio_crypt.c                       | 145 +++-----------
+ module/zcommon/zfs_fletcher.c                |  20 +-
+ module/zcommon/zfs_prop.c                    |  14 ++
+ module/zfs/arc.c                             |   2 +-
+ module/zfs/dsl_crypt.c                       |  20 +-
+ module/zfs/vdev_raidz_math.c                 |  20 +-
+ 19 files changed, 276 insertions(+), 294 deletions(-)
+
+Index: zfs-linux-0.8.2/config/kernel-fpu.m4
+===================================================================
+--- zfs-linux-0.8.2.orig/config/kernel-fpu.m4
++++ zfs-linux-0.8.2/config/kernel-fpu.m4
+@@ -2,15 +2,9 @@ dnl #
+ dnl # Handle differences in kernel FPU code.
+ dnl #
+ dnl # Kernel
+-dnl # 5.2:	The fpu->initialized flag was replaced by TIF_NEED_FPU_LOAD.
+-dnl #		HAVE_KERNEL_TIF_NEED_FPU_LOAD
+-dnl #
+-dnl # 5.0:	As an optimization SIMD operations performed by kernel
+-dnl #		threads can skip saving and restoring their FPU context.
+-dnl #		Wrappers have been introduced to determine the running
+-dnl #		context and use either the SIMD or generic implementation.
++dnl # 5.0:	Wrappers have been introduced to save/restore the FPU state.
+ dnl #		This change was made to the 4.19.38 and 4.14.120 LTS kernels.
+-dnl #		HAVE_KERNEL_FPU_INITIALIZED
++dnl #		HAVE_KERNEL_FPU_INTERNAL
+ dnl #
+ dnl # 4.2:	Use __kernel_fpu_{begin,end}()
+ dnl #		HAVE_UNDERSCORE_KERNEL_FPU & KERNEL_EXPORTS_X86_FPU
+@@ -38,6 +32,7 @@ AC_DEFUN([ZFS_AC_KERNEL_FPU_HEADER], [
+ 
+ AC_DEFUN([ZFS_AC_KERNEL_SRC_FPU], [
+ 	ZFS_LINUX_TEST_SRC([kernel_fpu], [
++		#include <linux/types.h>
+ 		#ifdef HAVE_KERNEL_FPU_API_HEADER
+ 		#include <asm/fpu/api.h>
+ 		#else
+@@ -50,6 +45,7 @@ AC_DEFUN([ZFS_AC_KERNEL_SRC_FPU], [
+ 	], [], [$ZFS_META_LICENSE])
+ 
+ 	ZFS_LINUX_TEST_SRC([__kernel_fpu], [
++		#include <linux/types.h>
+ 		#ifdef HAVE_KERNEL_FPU_API_HEADER
+ 		#include <asm/fpu/api.h>
+ 		#else
+@@ -61,22 +57,41 @@ AC_DEFUN([ZFS_AC_KERNEL_SRC_FPU], [
+ 		__kernel_fpu_end();
+ 	], [], [$ZFS_META_LICENSE])
+ 
+-	ZFS_LINUX_TEST_SRC([fpu_initialized], [
+-		#include <linux/module.h>
+-		#include <linux/sched.h>
+-	],[
+-		struct fpu *fpu = &current->thread.fpu;
+-		if (fpu->initialized) { return (0); };
+-	])
++	ZFS_LINUX_TEST_SRC([fpu_internal], [
++		#if defined(__x86_64) || defined(__x86_64__) || \
++		    defined(__i386) || defined(__i386__)
++		#if !defined(__x86)
++		#define __x86
++		#endif
++		#endif
+ 
+-	ZFS_LINUX_TEST_SRC([tif_need_fpu_load], [
+-		#include <linux/module.h>
+-		#include <asm/thread_info.h>
++		#if !defined(__x86)
++		#error Unsupported architecture
++		#endif
+ 
+-		#if !defined(TIF_NEED_FPU_LOAD)
+-		#error "TIF_NEED_FPU_LOAD undefined"
++		#include <linux/types.h>
++		#ifdef HAVE_KERNEL_FPU_API_HEADER
++		#include <asm/fpu/api.h>
++		#include <asm/fpu/internal.h>
++		#else
++		#include <asm/i387.h>
++		#include <asm/xcr.h>
++		#endif
++
++		#if !defined(XSTATE_XSAVE)
++		#error XSTATE_XSAVE not defined
+ 		#endif
+-	],[])
++
++		#if !defined(XSTATE_XRESTORE)
++		#error XSTATE_XRESTORE not defined
++		#endif
++	],[
++		struct fpu *fpu = &current->thread.fpu;
++		union fpregs_state *st = &fpu->state;
++		struct fregs_state *fr __attribute__ ((unused)) = &st->fsave;
++		struct fxregs_state *fxr __attribute__ ((unused)) = &st->fxsave;
++		struct xregs_state *xr __attribute__ ((unused)) = &st->xsave;
++	])
+ ])
+ 
+ AC_DEFUN([ZFS_AC_KERNEL_FPU], [
+@@ -104,25 +119,12 @@ AC_DEFUN([ZFS_AC_KERNEL_FPU], [
+ 			AC_DEFINE(KERNEL_EXPORTS_X86_FPU, 1,
+ 			    [kernel exports FPU functions])
+ 		],[
+-			dnl #
+-			dnl # Linux 5.0 kernel
+-			dnl #
+-			ZFS_LINUX_TEST_RESULT([fpu_initialized], [
+-				AC_MSG_RESULT(fpu.initialized)
+-				AC_DEFINE(HAVE_KERNEL_FPU_INITIALIZED, 1,
+-				    [kernel fpu.initialized exists])
++			ZFS_LINUX_TEST_RESULT([fpu_internal], [
++				AC_MSG_RESULT(internal)
++				AC_DEFINE(HAVE_KERNEL_FPU_INTERNAL, 1,
++				    [kernel fpu internal])
+ 			],[
+-				dnl #
+-				dnl # Linux 5.2 kernel
+-				dnl #
+-				ZFS_LINUX_TEST_RESULT([tif_need_fpu_load], [
+-					AC_MSG_RESULT(TIF_NEED_FPU_LOAD)
+-					AC_DEFINE(
+-					    HAVE_KERNEL_TIF_NEED_FPU_LOAD, 1,
+-					    [kernel TIF_NEED_FPU_LOAD exists])
+-				],[
+-					AC_MSG_RESULT(unavailable)
+-				])
++				AC_MSG_RESULT(unavailable)
+ 			])
+ 		])
+ 	])
+Index: zfs-linux-0.8.2/include/linux/simd.h
+===================================================================
+--- zfs-linux-0.8.2.orig/include/linux/simd.h
++++ zfs-linux-0.8.2/include/linux/simd.h
+@@ -33,9 +33,10 @@
+ #else
+ 
+ #define	kfpu_allowed()		0
+-#define	kfpu_initialize(tsk)	do {} while (0)
+ #define	kfpu_begin()		do {} while (0)
+ #define	kfpu_end()		do {} while (0)
++#define	kfpu_init()		0
++#define	kfpu_fini()		((void) 0)
+ 
+ #endif
+ #endif /* _SIMD_H */
+Index: zfs-linux-0.8.2/include/linux/simd_aarch64.h
+===================================================================
+--- zfs-linux-0.8.2.orig/include/linux/simd_aarch64.h
++++ zfs-linux-0.8.2/include/linux/simd_aarch64.h
+@@ -27,9 +27,10 @@
+  *
+  * Kernel fpu methods:
+  *	kfpu_allowed()
+- *	kfpu_initialize()
+  *	kfpu_begin()
+  *	kfpu_end()
++ *	kfpu_init()
++ *	kfpu_fini()
+  */
+ 
+ #ifndef _SIMD_AARCH64_H
+@@ -43,9 +44,10 @@
+ 
+ #include <asm/neon.h>
+ #define	kfpu_allowed()		1
+-#define	kfpu_initialize(tsk)	do {} while (0)
+ #define	kfpu_begin()		kernel_neon_begin()
+ #define	kfpu_end()		kernel_neon_end()
++#define	kfpu_init()		0
++#define	kfpu_fini()		((void) 0)
+ 
+ #endif /* __aarch64__ */
+ 
+Index: zfs-linux-0.8.2/include/linux/simd_x86.h
+===================================================================
+--- zfs-linux-0.8.2.orig/include/linux/simd_x86.h
++++ zfs-linux-0.8.2/include/linux/simd_x86.h
+@@ -27,9 +27,10 @@
+  *
+  * Kernel fpu methods:
+  *	kfpu_allowed()
+- *	kfpu_initialize()
+  *	kfpu_begin()
+  *	kfpu_end()
++ *	kfpu_init()
++ *	kfpu_fini()
+  *
+  * SIMD support:
+  *
+@@ -99,7 +100,8 @@
+ #if defined(KERNEL_EXPORTS_X86_FPU)
+ 
+ #define	kfpu_allowed()		1
+-#define	kfpu_initialize(tsk)	do {} while (0)
++#define	kfpu_init()		0
++#define	kfpu_fini()		((void) 0)
+ 
+ #if defined(HAVE_UNDERSCORE_KERNEL_FPU)
+ #define	kfpu_begin()		\
+@@ -126,45 +128,100 @@
+ #endif
+ 
+ #else /* defined(KERNEL_EXPORTS_X86_FPU) */
++
+ /*
+  * When the kernel_fpu_* symbols are unavailable then provide our own
+- * versions which allow the FPU to be safely used in kernel threads.
+- * In practice, this is not a significant restriction for ZFS since the
+- * vast majority of SIMD operations are performed by the IO pipeline.
++ * versions which allow the FPU to be safely used.
+  */
++#if defined(HAVE_KERNEL_FPU_INTERNAL)
++
++extern union fpregs_state **zfs_kfpu_fpregs;
+ 
+ /*
+- * Returns non-zero if FPU operations are allowed in the current context.
++ * Initialize per-cpu variables to store FPU state.
+  */
+-#if defined(HAVE_KERNEL_TIF_NEED_FPU_LOAD)
+-#define	kfpu_allowed()		((current->flags & PF_KTHREAD) && \
+-				test_thread_flag(TIF_NEED_FPU_LOAD))
+-#elif defined(HAVE_KERNEL_FPU_INITIALIZED)
+-#define	kfpu_allowed()		((current->flags & PF_KTHREAD) && \
+-				current->thread.fpu.initialized)
+-#else
+-#define	kfpu_allowed()		0
+-#endif
++static inline void
++kfpu_fini(void)
++{
++	int cpu;
++
++	for_each_possible_cpu(cpu) {
++		if (zfs_kfpu_fpregs[cpu] != NULL) {
++			kfree(zfs_kfpu_fpregs[cpu]);
++		}
++	}
++
++	kfree(zfs_kfpu_fpregs);
++}
++
++static inline int
++kfpu_init(void)
++{
++	int cpu;
++
++	zfs_kfpu_fpregs = kzalloc(num_possible_cpus() *
++	    sizeof (union fpregs_state *), GFP_KERNEL);
++	if (zfs_kfpu_fpregs == NULL)
++		return (-ENOMEM);
++
++	for_each_possible_cpu(cpu) {
++		zfs_kfpu_fpregs[cpu] = kmalloc_node(sizeof (union fpregs_state),
++		    GFP_KERNEL | __GFP_ZERO, cpu_to_node(cpu));
++		if (zfs_kfpu_fpregs[cpu] == NULL) {
++			kfpu_fini();
++			return (-ENOMEM);
++		}
++	}
++
++	return (0);
++}
++
++#define	kfpu_allowed()		1
++#define	ex_handler_fprestore	ex_handler_default
++
++/*
++ * FPU save and restore instructions.
++ */
++#define	__asm			__asm__ __volatile__
++#define	kfpu_fxsave(addr)	__asm("fxsave %0" : "=m" (*(addr)))
++#define	kfpu_fxsaveq(addr)	__asm("fxsaveq %0" : "=m" (*(addr)))
++#define	kfpu_fnsave(addr)	__asm("fnsave %0; fwait" : "=m" (*(addr)))
++#define	kfpu_fxrstor(addr)	__asm("fxrstor %0" : : "m" (*(addr)))
++#define	kfpu_fxrstorq(addr)	__asm("fxrstorq %0" : : "m" (*(addr)))
++#define	kfpu_frstor(addr)	__asm("frstor %0" : : "m" (*(addr)))
++#define	kfpu_fxsr_clean(rval)	__asm("fnclex; emms; fildl %P[addr]" \
++				    : : [addr] "m" (rval));
+ 
+ static inline void
+-kfpu_initialize(void)
++kfpu_save_xsave(struct xregs_state *addr, uint64_t mask)
+ {
+-	WARN_ON_ONCE(!(current->flags & PF_KTHREAD));
++	uint32_t low, hi;
++	int err;
+ 
+-#if defined(HAVE_KERNEL_TIF_NEED_FPU_LOAD)
+-	__fpu_invalidate_fpregs_state(&current->thread.fpu);
+-	set_thread_flag(TIF_NEED_FPU_LOAD);
+-#elif defined(HAVE_KERNEL_FPU_INITIALIZED)
+-	__fpu_invalidate_fpregs_state(&current->thread.fpu);
+-	current->thread.fpu.initialized = 1;
+-#endif
++	low = mask;
++	hi = mask >> 32;
++	XSTATE_XSAVE(addr, low, hi, err);
++	WARN_ON_ONCE(err);
+ }
+ 
+ static inline void
+-kfpu_begin(void)
++kfpu_save_fxsr(struct fxregs_state *addr)
+ {
+-	WARN_ON_ONCE(!kfpu_allowed());
++	if (IS_ENABLED(CONFIG_X86_32))
++		kfpu_fxsave(addr);
++	else
++		kfpu_fxsaveq(addr);
++}
+ 
++static inline void
++kfpu_save_fsave(struct fregs_state *addr)
++{
++	kfpu_fnsave(addr);
++}
++
++static inline void
++kfpu_begin(void)
++{
+ 	/*
+ 	 * Preemption and interrupts must be disabled for the critical
+ 	 * region where the FPU state is being modified.
+@@ -172,50 +229,92 @@ kfpu_begin(void)
+ 	preempt_disable();
+ 	local_irq_disable();
+ 
+-#if defined(HAVE_KERNEL_TIF_NEED_FPU_LOAD)
+ 	/*
+ 	 * The current FPU registers need to be preserved by kfpu_begin()
+-	 * and restored by kfpu_end().  This is required because we can
+-	 * not call __cpu_invalidate_fpregs_state() to invalidate the
+-	 * per-cpu FPU state and force them to be restored during a
+-	 * context switch.
++	 * and restored by kfpu_end().  They are stored in a dedicated
++	 * per-cpu variable, not in the task struct, this allows any user
++	 * FPU state to be correctly preserved and restored.
+ 	 */
+-	copy_fpregs_to_fpstate(&current->thread.fpu);
+-#elif defined(HAVE_KERNEL_FPU_INITIALIZED)
++	union fpregs_state *state = zfs_kfpu_fpregs[smp_processor_id()];
++
++	if (static_cpu_has(X86_FEATURE_XSAVE)) {
++		kfpu_save_xsave(&state->xsave, ~0);
++	} else if (static_cpu_has(X86_FEATURE_FXSR)) {
++		kfpu_save_fxsr(&state->fxsave);
++	} else {
++		kfpu_save_fsave(&state->fsave);
++	}
++}
++
++static inline void
++kfpu_restore_xsave(struct xregs_state *addr, uint64_t mask)
++{
++	uint32_t low, hi;
++
++	low = mask;
++	hi = mask >> 32;
++	XSTATE_XRESTORE(addr, low, hi);
++}
++
++static inline void
++kfpu_restore_fxsr(struct fxregs_state *addr)
++{
+ 	/*
+-	 * There is no need to preserve and restore the FPU registers.
+-	 * They will always be restored from the task's stored FPU state
+-	 * when switching contexts.
++	 * On AuthenticAMD K7 and K8 processors the fxrstor instruction only
++	 * restores the _x87 FOP, FIP, and FDP registers when an exception
++	 * is pending.  Clean the _x87 state to force the restore.
+ 	 */
+-	WARN_ON_ONCE(current->thread.fpu.initialized == 0);
+-#endif
++	if (unlikely(static_cpu_has_bug(X86_BUG_FXSAVE_LEAK)))
++		kfpu_fxsr_clean(addr);
++
++	if (IS_ENABLED(CONFIG_X86_32)) {
++		kfpu_fxrstor(addr);
++	} else {
++		kfpu_fxrstorq(addr);
++	}
++}
++
++static inline void
++kfpu_restore_fsave(struct fregs_state *addr)
++{
++	kfpu_frstor(addr);
+ }
+ 
+ static inline void
+ kfpu_end(void)
+ {
+-#if defined(HAVE_KERNEL_TIF_NEED_FPU_LOAD)
+-	union fpregs_state *state = &current->thread.fpu.state;
+-	int error;
+-
+-	if (use_xsave()) {
+-		error = copy_kernel_to_xregs_err(&state->xsave, -1);
+-	} else if (use_fxsr()) {
+-		error = copy_kernel_to_fxregs_err(&state->fxsave);
++	union fpregs_state *state = zfs_kfpu_fpregs[smp_processor_id()];
++
++	if (static_cpu_has(X86_FEATURE_XSAVE)) {
++		kfpu_restore_xsave(&state->xsave, ~0);
++	} else if (static_cpu_has(X86_FEATURE_FXSR)) {
++		kfpu_restore_fxsr(&state->fxsave);
+ 	} else {
+-		error = copy_kernel_to_fregs_err(&state->fsave);
++		kfpu_restore_fsave(&state->fsave);
+ 	}
+-	WARN_ON_ONCE(error);
+-#endif
+ 
+ 	local_irq_enable();
+ 	preempt_enable();
+ }
+-#endif /* defined(HAVE_KERNEL_FPU) */
++
++#else
++
++/*
++ * FPU support is unavailable.
++ */
++#define	kfpu_allowed()		0
++#define	kfpu_begin()		do {} while (0)
++#define	kfpu_end()		do {} while (0)
++#define	kfpu_init()		0
++#define	kfpu_fini()		((void) 0)
++
++#endif /* defined(HAVE_KERNEL_FPU_INTERNAL) */
++#endif /* defined(KERNEL_EXPORTS_X86_FPU) */
+ 
+ /*
+  * Linux kernel provides an interface for CPU feature testing.
+  */
++
+ /*
+  * Detect register set support
+  */
+Index: zfs-linux-0.8.2/include/sys/zio_crypt.h
+===================================================================
+--- zfs-linux-0.8.2.orig/include/sys/zio_crypt.h
++++ zfs-linux-0.8.2/include/sys/zio_crypt.h
+@@ -107,11 +107,11 @@ void zio_crypt_key_destroy(zio_crypt_key
+ int zio_crypt_key_init(uint64_t crypt, zio_crypt_key_t *key);
+ int zio_crypt_key_get_salt(zio_crypt_key_t *key, uint8_t *salt_out);
+ 
+-int zio_crypt_key_wrap(spa_t *spa, crypto_key_t *cwkey, zio_crypt_key_t *key,
+-    uint8_t *iv, uint8_t *mac, uint8_t *keydata_out, uint8_t *hmac_keydata_out);
+-int zio_crypt_key_unwrap(spa_t *spa, crypto_key_t *cwkey, uint64_t crypt,
+-    uint64_t version, uint64_t guid, uint8_t *keydata, uint8_t *hmac_keydata,
+-    uint8_t *iv, uint8_t *mac, zio_crypt_key_t *key);
++int zio_crypt_key_wrap(crypto_key_t *cwkey, zio_crypt_key_t *key, uint8_t *iv,
++    uint8_t *mac, uint8_t *keydata_out, uint8_t *hmac_keydata_out);
++int zio_crypt_key_unwrap(crypto_key_t *cwkey, uint64_t crypt, uint64_t version,
++    uint64_t guid, uint8_t *keydata, uint8_t *hmac_keydata, uint8_t *iv,
++    uint8_t *mac, zio_crypt_key_t *key);
+ int zio_crypt_generate_iv(uint8_t *ivbuf);
+ int zio_crypt_generate_iv_salt_dedup(zio_crypt_key_t *key, uint8_t *data,
+     uint_t datalen, uint8_t *ivbuf, uint8_t *salt);
+@@ -132,11 +132,11 @@ int zio_crypt_do_hmac(zio_crypt_key_t *k
+     uint8_t *digestbuf, uint_t digestlen);
+ int zio_crypt_do_objset_hmacs(zio_crypt_key_t *key, void *data, uint_t datalen,
+     boolean_t byteswap, uint8_t *portable_mac, uint8_t *local_mac);
+-int zio_do_crypt_data(spa_t *spa, boolean_t encrypt, zio_crypt_key_t *key,
++int zio_do_crypt_data(boolean_t encrypt, zio_crypt_key_t *key,
+     dmu_object_type_t ot, boolean_t byteswap, uint8_t *salt, uint8_t *iv,
+     uint8_t *mac, uint_t datalen, uint8_t *plainbuf, uint8_t *cipherbuf,
+     boolean_t *no_crypt);
+-int zio_do_crypt_abd(spa_t *spa, boolean_t encrypt, zio_crypt_key_t *key,
++int zio_do_crypt_abd(boolean_t encrypt, zio_crypt_key_t *key,
+     dmu_object_type_t ot, boolean_t byteswap, uint8_t *salt, uint8_t *iv,
+     uint8_t *mac, uint_t datalen, abd_t *pabd, abd_t *cabd,
+     boolean_t *no_crypt);
+Index: zfs-linux-0.8.2/lib/libspl/include/sys/simd.h
+===================================================================
+--- zfs-linux-0.8.2.orig/lib/libspl/include/sys/simd.h
++++ zfs-linux-0.8.2/lib/libspl/include/sys/simd.h
+@@ -34,9 +34,10 @@
+ #include <cpuid.h>
+ 
+ #define	kfpu_allowed()		1
+-#define	kfpu_initialize(tsk)	do {} while (0)
+ #define	kfpu_begin()		do {} while (0)
+ #define	kfpu_end()		do {} while (0)
++#define	kfpu_init()		0
++#define	kfpu_fini()		((void) 0)
+ 
+ /*
+  * CPUID feature tests for user-space.
+Index: zfs-linux-0.8.2/module/icp/algs/aes/aes_impl.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/icp/algs/aes/aes_impl.c
++++ zfs-linux-0.8.2/module/icp/algs/aes/aes_impl.c
+@@ -295,9 +295,8 @@ aes_impl_get_ops(void)
+ /*
+  * Initialize all supported implementations.
+  */
+-/* ARGSUSED */
+ void
+-aes_impl_init(void *arg)
++aes_impl_init(void)
+ {
+ 	aes_impl_ops_t *curr_impl;
+ 	int i, c;
+Index: zfs-linux-0.8.2/module/icp/algs/modes/gcm.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/icp/algs/modes/gcm.c
++++ zfs-linux-0.8.2/module/icp/algs/modes/gcm.c
+@@ -703,9 +703,8 @@ gcm_impl_get_ops()
+ /*
+  * Initialize all supported implementations.
+  */
+-/* ARGSUSED */
+ void
+-gcm_impl_init(void *arg)
++gcm_impl_init(void)
+ {
+ 	gcm_impl_ops_t *curr_impl;
+ 	int i, c;
+Index: zfs-linux-0.8.2/module/icp/include/aes/aes_impl.h
+===================================================================
+--- zfs-linux-0.8.2.orig/module/icp/include/aes/aes_impl.h
++++ zfs-linux-0.8.2/module/icp/include/aes/aes_impl.h
+@@ -198,7 +198,7 @@ extern const aes_impl_ops_t aes_aesni_im
+ /*
+  * Initializes fastest implementation
+  */
+-void aes_impl_init(void *arg);
++void aes_impl_init(void);
+ 
+ /*
+  * Returns optimal allowed AES implementation
+Index: zfs-linux-0.8.2/module/icp/include/modes/gcm_impl.h
+===================================================================
+--- zfs-linux-0.8.2.orig/module/icp/include/modes/gcm_impl.h
++++ zfs-linux-0.8.2/module/icp/include/modes/gcm_impl.h
+@@ -61,7 +61,7 @@ extern const gcm_impl_ops_t gcm_pclmulqd
+ /*
+  * Initializes fastest implementation
+  */
+-void gcm_impl_init(void *arg);
++void gcm_impl_init(void);
+ 
+ /*
+  * Returns optimal allowed GCM implementation
+Index: zfs-linux-0.8.2/module/icp/io/aes.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/icp/io/aes.c
++++ zfs-linux-0.8.2/module/icp/io/aes.c
+@@ -206,35 +206,9 @@ aes_mod_init(void)
+ {
+ 	int ret;
+ 
+-#if defined(_KERNEL)
+-	/*
+-	 * Determine the fastest available implementation.  The benchmarks
+-	 * are run in dedicated kernel threads to allow Linux 5.0+ kernels
+-	 * to use SIMD operations.  If for some reason this isn't possible,
+-	 * fallback to the generic implementations.  See the comment in
+-	 * linux/simd_x86.h for additional details.  Additionally, this has
+-	 * the benefit of allowing them to be run in parallel.
+-	 */
+-	taskqid_t aes_id = taskq_dispatch(system_taskq, aes_impl_init,
+-	    NULL, TQ_SLEEP);
+-	taskqid_t gcm_id = taskq_dispatch(system_taskq, gcm_impl_init,
+-	    NULL, TQ_SLEEP);
+-
+-	if (aes_id != TASKQID_INVALID) {
+-		taskq_wait_id(system_taskq, aes_id);
+-	} else {
+-		aes_impl_init(NULL);
+-	}
+-
+-	if (gcm_id != TASKQID_INVALID) {
+-		taskq_wait_id(system_taskq, gcm_id);
+-	} else {
+-		gcm_impl_init(NULL);
+-	}
+-#else
+-	aes_impl_init(NULL);
+-	gcm_impl_init(NULL);
+-#endif
++	/* Determine the fastest available implementation. */
++	aes_impl_init();
++	gcm_impl_init();
+ 
+ 	if ((ret = mod_install(&modlinkage)) != 0)
+ 		return (ret);
+Index: zfs-linux-0.8.2/module/spl/spl-taskq.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/spl/spl-taskq.c
++++ zfs-linux-0.8.2/module/spl/spl-taskq.c
+@@ -28,7 +28,6 @@
+ #include <sys/taskq.h>
+ #include <sys/kmem.h>
+ #include <sys/tsd.h>
+-#include <sys/simd.h>
+ 
+ int spl_taskq_thread_bind = 0;
+ module_param(spl_taskq_thread_bind, int, 0644);
+@@ -854,7 +853,6 @@ taskq_thread(void *args)
+ 	sigfillset(&blocked);
+ 	sigprocmask(SIG_BLOCK, &blocked, NULL);
+ 	flush_signals(current);
+-	kfpu_initialize();
+ 
+ 	tsd_set(taskq_tsd, tq);
+ 	spin_lock_irqsave_nested(&tq->tq_lock, flags, tq->tq_lock_class);
+Index: zfs-linux-0.8.2/module/spl/spl-thread.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/spl/spl-thread.c
++++ zfs-linux-0.8.2/module/spl/spl-thread.c
+@@ -27,7 +27,6 @@
+ #include <sys/thread.h>
+ #include <sys/kmem.h>
+ #include <sys/tsd.h>
+-#include <sys/simd.h>
+ 
+ /*
+  * Thread interfaces
+@@ -55,7 +54,6 @@ thread_generic_wrapper(void *arg)
+ 	args = tp->tp_args;
+ 	set_current_state(tp->tp_state);
+ 	set_user_nice((kthread_t *)current, PRIO_TO_NICE(tp->tp_pri));
+-	kfpu_initialize();
+ 	kmem_free(tp->tp_name, tp->tp_name_size);
+ 	kmem_free(tp, sizeof (thread_priv_t));
+ 
+Index: zfs-linux-0.8.2/module/zfs/zio_crypt.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/zfs/zio_crypt.c
++++ zfs-linux-0.8.2/module/zfs/zio_crypt.c
+@@ -376,7 +376,7 @@ error:
+  * plaintext / ciphertext alone.
+  */
+ static int
+-zio_do_crypt_uio_impl(boolean_t encrypt, uint64_t crypt, crypto_key_t *key,
++zio_do_crypt_uio(boolean_t encrypt, uint64_t crypt, crypto_key_t *key,
+     crypto_ctx_template_t tmpl, uint8_t *ivbuf, uint_t datalen,
+     uio_t *puio, uio_t *cuio, uint8_t *authbuf, uint_t auth_len)
+ {
+@@ -476,75 +476,9 @@ error:
+ 	return (ret);
+ }
+ 
+-typedef struct crypt_uio_arg {
+-	boolean_t cu_encrypt;
+-	uint64_t cu_crypt;
+-	crypto_key_t *cu_key;
+-	crypto_ctx_template_t cu_tmpl;
+-	uint8_t *cu_ivbuf;
+-	uint_t cu_datalen;
+-	uio_t *cu_puio;
+-	uio_t *cu_cuio;
+-	uint8_t *cu_authbuf;
+-	uint_t cu_auth_len;
+-	int cu_error;
+-} crypt_uio_arg_t;
+-
+-static void
+-zio_do_crypt_uio_func(void *arg)
+-{
+-	crypt_uio_arg_t *cu = (crypt_uio_arg_t *)arg;
+-
+-	cu->cu_error = zio_do_crypt_uio_impl(cu->cu_encrypt, cu->cu_crypt,
+-	    cu->cu_key, cu->cu_tmpl, cu->cu_ivbuf, cu->cu_datalen,
+-	    cu->cu_puio, cu->cu_cuio, cu->cu_authbuf, cu->cu_auth_len);
+-}
+-
+-static int
+-zio_do_crypt_uio(spa_t *spa, boolean_t encrypt, uint64_t crypt,
+-    crypto_key_t *key, crypto_ctx_template_t tmpl, uint8_t *ivbuf,
+-    uint_t datalen, uio_t *puio, uio_t *cuio, uint8_t *authbuf,
+-    uint_t auth_len)
+-{
+-	int error;
+-
+-	/*
+-	 * Dispatch to the I/O pipeline as required by the context in order
+-	 * to take advantage of the SIMD optimization when available.
+-	 */
+-	if (kfpu_allowed()) {
+-		error = zio_do_crypt_uio_impl(encrypt, crypt, key, tmpl,
+-		    ivbuf, datalen, puio, cuio, authbuf, auth_len);
+-	} else {
+-		crypt_uio_arg_t *cu;
+-
+-		cu = kmem_alloc(sizeof (*cu), KM_SLEEP);
+-		cu->cu_encrypt = encrypt;
+-		cu->cu_crypt = crypt;
+-		cu->cu_key = key;
+-		cu->cu_tmpl = tmpl;
+-		cu->cu_ivbuf = ivbuf;
+-		cu->cu_datalen = datalen;
+-		cu->cu_puio = puio;
+-		cu->cu_cuio = cuio;
+-		cu->cu_authbuf = authbuf;
+-		cu->cu_auth_len = auth_len;
+-		cu->cu_error = 0;
+-
+-		spa_taskq_dispatch_sync(spa,
+-		    encrypt ? ZIO_TYPE_WRITE : ZIO_TYPE_READ,
+-		    ZIO_TASKQ_ISSUE, zio_do_crypt_uio_func, cu, TQ_SLEEP);
+-
+-		error = cu->cu_error;
+-		kmem_free(cu, sizeof (*cu));
+-	}
+-
+-	return (error);
+-}
+-
+ int
+-zio_crypt_key_wrap(spa_t *spa, crypto_key_t *cwkey, zio_crypt_key_t *key,
+-    uint8_t *iv, uint8_t *mac, uint8_t *keydata_out, uint8_t *hmac_keydata_out)
++zio_crypt_key_wrap(crypto_key_t *cwkey, zio_crypt_key_t *key, uint8_t *iv,
++    uint8_t *mac, uint8_t *keydata_out, uint8_t *hmac_keydata_out)
+ {
+ 	int ret;
+ 	uio_t puio, cuio;
+@@ -601,7 +535,7 @@ zio_crypt_key_wrap(spa_t *spa, crypto_ke
+ 	cuio.uio_segflg = UIO_SYSSPACE;
+ 
+ 	/* encrypt the keys and store the resulting ciphertext and mac */
+-	ret = zio_do_crypt_uio(spa, B_TRUE, crypt, cwkey, NULL, iv, enc_len,
++	ret = zio_do_crypt_uio(B_TRUE, crypt, cwkey, NULL, iv, enc_len,
+ 	    &puio, &cuio, (uint8_t *)aad, aad_len);
+ 	if (ret != 0)
+ 		goto error;
+@@ -612,33 +546,12 @@ error:
+ 	return (ret);
+ }
+ 
+-static void
+-zio_crypt_create_ctx_templates(void *arg)
+-{
+-	zio_crypt_key_t *key = (zio_crypt_key_t *)arg;
+-	crypto_mechanism_t mech;
+-	int ret;
+-
+-	mech.cm_type = crypto_mech2id(
+-	    zio_crypt_table[key->zk_crypt].ci_mechname);
+-
+-	ret = crypto_create_ctx_template(&mech, &key->zk_current_key,
+-	    &key->zk_current_tmpl, KM_SLEEP);
+-	if (ret != CRYPTO_SUCCESS)
+-		key->zk_current_tmpl = NULL;
+-
+-	mech.cm_type = crypto_mech2id(SUN_CKM_SHA512_HMAC);
+-	ret = crypto_create_ctx_template(&mech, &key->zk_hmac_key,
+-	    &key->zk_hmac_tmpl, KM_SLEEP);
+-	if (ret != CRYPTO_SUCCESS)
+-		key->zk_hmac_tmpl = NULL;
+-}
+-
+ int
+-zio_crypt_key_unwrap(spa_t *spa, crypto_key_t *cwkey, uint64_t crypt,
+-    uint64_t version, uint64_t guid, uint8_t *keydata, uint8_t *hmac_keydata,
+-    uint8_t *iv, uint8_t *mac, zio_crypt_key_t *key)
++zio_crypt_key_unwrap(crypto_key_t *cwkey, uint64_t crypt, uint64_t version,
++    uint64_t guid, uint8_t *keydata, uint8_t *hmac_keydata, uint8_t *iv,
++    uint8_t *mac, zio_crypt_key_t *key)
+ {
++	crypto_mechanism_t mech;
+ 	uio_t puio, cuio;
+ 	uint64_t aad[3];
+ 	iovec_t plain_iovecs[2], cipher_iovecs[3];
+@@ -685,7 +598,7 @@ zio_crypt_key_unwrap(spa_t *spa, crypto_
+ 	cuio.uio_segflg = UIO_SYSSPACE;
+ 
+ 	/* decrypt the keys and store the result in the output buffers */
+-	ret = zio_do_crypt_uio(spa, B_FALSE, crypt, cwkey, NULL, iv, enc_len,
++	ret = zio_do_crypt_uio(B_FALSE, crypt, cwkey, NULL, iv, enc_len,
+ 	    &puio, &cuio, (uint8_t *)aad, aad_len);
+ 	if (ret != 0)
+ 		goto error;
+@@ -711,18 +624,27 @@ zio_crypt_key_unwrap(spa_t *spa, crypto_
+ 	key->zk_hmac_key.ck_data = key->zk_hmac_keydata;
+ 	key->zk_hmac_key.ck_length = CRYPTO_BYTES2BITS(SHA512_HMAC_KEYLEN);
+ 
++	/*
++	 * Initialize the crypto templates. It's ok if this fails because
++	 * this is just an optimization.
++	 */
++	mech.cm_type = crypto_mech2id(zio_crypt_table[crypt].ci_mechname);
++	ret = crypto_create_ctx_template(&mech, &key->zk_current_key,
++	    &key->zk_current_tmpl, KM_SLEEP);
++	if (ret != CRYPTO_SUCCESS)
++		key->zk_current_tmpl = NULL;
++
++	mech.cm_type = crypto_mech2id(SUN_CKM_SHA512_HMAC);
++	ret = crypto_create_ctx_template(&mech, &key->zk_hmac_key,
++	    &key->zk_hmac_tmpl, KM_SLEEP);
++	if (ret != CRYPTO_SUCCESS)
++		key->zk_hmac_tmpl = NULL;
++
+ 	key->zk_crypt = crypt;
+ 	key->zk_version = version;
+ 	key->zk_guid = guid;
+ 	key->zk_salt_count = 0;
+ 
+-	/*
+-	 * Initialize the crypto templates in the context they will be
+-	 * primarily used. It's ok if this fails, it's just an optimization.
+-	 */
+-	spa_taskq_dispatch_sync(spa, ZIO_TYPE_READ, ZIO_TASKQ_ISSUE,
+-	    zio_crypt_create_ctx_templates, key, TQ_SLEEP);
+-
+ 	return (0);
+ 
+ error:
+@@ -1941,7 +1863,7 @@ error:
+  * Primary encryption / decryption entrypoint for zio data.
+  */
+ int
+-zio_do_crypt_data(spa_t *spa, boolean_t encrypt, zio_crypt_key_t *key,
++zio_do_crypt_data(boolean_t encrypt, zio_crypt_key_t *key,
+     dmu_object_type_t ot, boolean_t byteswap, uint8_t *salt, uint8_t *iv,
+     uint8_t *mac, uint_t datalen, uint8_t *plainbuf, uint8_t *cipherbuf,
+     boolean_t *no_crypt)
+@@ -2028,8 +1950,8 @@ zio_do_crypt_data(spa_t *spa, boolean_t
+ 		goto error;
+ 
+ 	/* perform the encryption / decryption in software */
+-	ret = zio_do_crypt_uio(spa, encrypt, key->zk_crypt, ckey, tmpl, iv,
+-	    enc_len, &puio, &cuio, authbuf, auth_len);
++	ret = zio_do_crypt_uio(encrypt, key->zk_crypt, ckey, tmpl, iv, enc_len,
++	    &puio, &cuio, authbuf, auth_len);
+ 	if (ret != 0)
+ 		goto error;
+ 
+@@ -2065,10 +1987,9 @@ error:
+  * linear buffers.
+  */
+ int
+-zio_do_crypt_abd(spa_t *spa, boolean_t encrypt, zio_crypt_key_t *key,
+-    dmu_object_type_t ot, boolean_t byteswap, uint8_t *salt, uint8_t *iv,
+-    uint8_t *mac, uint_t datalen, abd_t *pabd, abd_t *cabd,
+-    boolean_t *no_crypt)
++zio_do_crypt_abd(boolean_t encrypt, zio_crypt_key_t *key, dmu_object_type_t ot,
++    boolean_t byteswap, uint8_t *salt, uint8_t *iv, uint8_t *mac,
++    uint_t datalen, abd_t *pabd, abd_t *cabd, boolean_t *no_crypt)
+ {
+ 	int ret;
+ 	void *ptmp, *ctmp;
+@@ -2081,7 +2002,7 @@ zio_do_crypt_abd(spa_t *spa, boolean_t e
+ 		ctmp = abd_borrow_buf_copy(cabd, datalen);
+ 	}
+ 
+-	ret = zio_do_crypt_data(spa, encrypt, key, ot, byteswap, salt, iv, mac,
++	ret = zio_do_crypt_data(encrypt, key, ot, byteswap, salt, iv, mac,
+ 	    datalen, ptmp, ctmp, no_crypt);
+ 	if (ret != 0)
+ 		goto error;
+Index: zfs-linux-0.8.2/module/zcommon/zfs_fletcher.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/zcommon/zfs_fletcher.c
++++ zfs-linux-0.8.2/module/zcommon/zfs_fletcher.c
+@@ -726,7 +726,7 @@ fletcher_4_benchmark_impl(boolean_t nati
+  * Initialize and benchmark all supported implementations.
+  */
+ static void
+-fletcher_4_benchmark(void *arg)
++fletcher_4_benchmark(void)
+ {
+ 	fletcher_4_ops_t *curr_impl;
+ 	int i, c;
+@@ -769,20 +769,10 @@ fletcher_4_benchmark(void *arg)
+ void
+ fletcher_4_init(void)
+ {
+-#if defined(_KERNEL)
+-	/*
+-	 * For 5.0 and latter Linux kernels the fletcher 4 benchmarks are
+-	 * run in a kernel threads.  This is needed to take advantage of the
+-	 * SIMD functionality, see include/linux/simd_x86.h for details.
+-	 */
+-	taskqid_t id = taskq_dispatch(system_taskq, fletcher_4_benchmark,
+-	    NULL, TQ_SLEEP);
+-	if (id != TASKQID_INVALID) {
+-		taskq_wait_id(system_taskq, id);
+-	} else {
+-		fletcher_4_benchmark(NULL);
+-	}
++	/* Determine the fastest available implementation. */
++	fletcher_4_benchmark();
+ 
++#if defined(_KERNEL)
+ 	/* Install kstats for all implementations */
+ 	fletcher_4_kstat = kstat_create("zfs", 0, "fletcher_4_bench", "misc",
+ 	    KSTAT_TYPE_RAW, 0, KSTAT_FLAG_VIRTUAL);
+@@ -795,8 +785,6 @@ fletcher_4_init(void)
+ 		    fletcher_4_kstat_addr);
+ 		kstat_install(fletcher_4_kstat);
+ 	}
+-#else
+-	fletcher_4_benchmark(NULL);
+ #endif
+ 
+ 	/* Finish initialization */
+Index: zfs-linux-0.8.2/module/zcommon/zfs_prop.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/zcommon/zfs_prop.c
++++ zfs-linux-0.8.2/module/zcommon/zfs_prop.c
+@@ -853,10 +853,23 @@ zfs_prop_align_right(zfs_prop_t prop)
+ #endif
+ 
+ #if defined(_KERNEL)
++
++#include <sys/simd.h>
++
++#if defined(HAVE_KERNEL_FPU_INTERNAL)
++union fpregs_state **zfs_kfpu_fpregs;
++EXPORT_SYMBOL(zfs_kfpu_fpregs);
++#endif /* HAVE_KERNEL_FPU_INTERNAL */
++
+ static int __init
+ zcommon_init(void)
+ {
++	int error = kfpu_init();
++	if (error)
++		return (error);
++
+ 	fletcher_4_init();
++
+ 	return (0);
+ }
+ 
+@@ -864,6 +877,7 @@ static void __exit
+ zcommon_fini(void)
+ {
+ 	fletcher_4_fini();
++	kfpu_fini();
+ }
+ 
+ module_init(zcommon_init);
+Index: zfs-linux-0.8.2/module/zfs/arc.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/zfs/arc.c
++++ zfs-linux-0.8.2/module/zfs/arc.c
+@@ -8819,7 +8819,7 @@ l2arc_apply_transforms(spa_t *spa, arc_b
+ 		if (ret != 0)
+ 			goto error;
+ 
+-		ret = zio_do_crypt_abd(spa, B_TRUE, &dck->dck_key,
++		ret = zio_do_crypt_abd(B_TRUE, &dck->dck_key,
+ 		    hdr->b_crypt_hdr.b_ot, bswap, hdr->b_crypt_hdr.b_salt,
+ 		    hdr->b_crypt_hdr.b_iv, mac, psize, to_write, eabd,
+ 		    &no_crypt);
+Index: zfs-linux-0.8.2/module/zfs/dsl_crypt.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/zfs/dsl_crypt.c
++++ zfs-linux-0.8.2/module/zfs/dsl_crypt.c
+@@ -601,8 +601,8 @@ dsl_crypto_key_open(objset_t *mos, dsl_w
+ 	 * Unwrap the keys. If there is an error return EACCES to indicate
+ 	 * an authentication failure.
+ 	 */
+-	ret = zio_crypt_key_unwrap(mos->os_spa, &wkey->wk_key, crypt, version,
+-	    guid, raw_keydata, raw_hmac_keydata, iv, mac, &dck->dck_key);
++	ret = zio_crypt_key_unwrap(&wkey->wk_key, crypt, version, guid,
++	    raw_keydata, raw_hmac_keydata, iv, mac, &dck->dck_key);
+ 	if (ret != 0) {
+ 		ret = SET_ERROR(EACCES);
+ 		goto error;
+@@ -1221,7 +1221,6 @@ dsl_crypto_key_sync(dsl_crypto_key_t *dc
+ {
+ 	zio_crypt_key_t *key = &dck->dck_key;
+ 	dsl_wrapping_key_t *wkey = dck->dck_wkey;
+-	objset_t *mos = tx->tx_pool->dp_meta_objset;
+ 	uint8_t keydata[MASTER_KEY_MAX_LEN];
+ 	uint8_t hmac_keydata[SHA512_HMAC_KEYLEN];
+ 	uint8_t iv[WRAPPING_IV_LEN];
+@@ -1231,13 +1230,14 @@ dsl_crypto_key_sync(dsl_crypto_key_t *dc
+ 	ASSERT3U(key->zk_crypt, <, ZIO_CRYPT_FUNCTIONS);
+ 
+ 	/* encrypt and store the keys along with the IV and MAC */
+-	VERIFY0(zio_crypt_key_wrap(mos->os_spa, &dck->dck_wkey->wk_key, key,
+-	    iv, mac, keydata, hmac_keydata));
++	VERIFY0(zio_crypt_key_wrap(&dck->dck_wkey->wk_key, key, iv, mac,
++	    keydata, hmac_keydata));
+ 
+ 	/* update the ZAP with the obtained values */
+-	dsl_crypto_key_sync_impl(mos, dck->dck_obj, key->zk_crypt,
+-	    wkey->wk_ddobj, key->zk_guid, iv, mac, keydata, hmac_keydata,
+-	    wkey->wk_keyformat, wkey->wk_salt, wkey->wk_iters, tx);
++	dsl_crypto_key_sync_impl(tx->tx_pool->dp_meta_objset, dck->dck_obj,
++	    key->zk_crypt, wkey->wk_ddobj, key->zk_guid, iv, mac, keydata,
++	    hmac_keydata, wkey->wk_keyformat, wkey->wk_salt, wkey->wk_iters,
++	    tx);
+ }
+ 
+ typedef struct spa_keystore_change_key_args {
+@@ -2815,8 +2815,8 @@ spa_do_crypt_abd(boolean_t encrypt, spa_
+ 	}
+ 
+ 	/* call lower level function to perform encryption / decryption */
+-	ret = zio_do_crypt_data(spa, encrypt, &dck->dck_key, ot, bswap, salt,
+-	    iv, mac, datalen, plainbuf, cipherbuf, no_crypt);
++	ret = zio_do_crypt_data(encrypt, &dck->dck_key, ot, bswap, salt, iv,
++	    mac, datalen, plainbuf, cipherbuf, no_crypt);
+ 
+ 	/*
+ 	 * Handle injected decryption faults. Unfortunately, we cannot inject
+Index: zfs-linux-0.8.2/module/zfs/vdev_raidz_math.c
+===================================================================
+--- zfs-linux-0.8.2.orig/module/zfs/vdev_raidz_math.c
++++ zfs-linux-0.8.2/module/zfs/vdev_raidz_math.c
+@@ -445,7 +445,7 @@ benchmark_raidz_impl(raidz_map_t *bench_
+  * Initialize and benchmark all supported implementations.
+  */
+ static void
+-benchmark_raidz(void *arg)
++benchmark_raidz(void)
+ {
+ 	raidz_impl_ops_t *curr_impl;
+ 	int i, c;
+@@ -515,20 +515,10 @@ benchmark_raidz(void *arg)
+ void
+ vdev_raidz_math_init(void)
+ {
+-#if defined(_KERNEL)
+-	/*
+-	 * For 5.0 and latter Linux kernels the fletcher 4 benchmarks are
+-	 * run in a kernel threads.  This is needed to take advantage of the
+-	 * SIMD functionality, see include/linux/simd_x86.h for details.
+-	 */
+-	taskqid_t id = taskq_dispatch(system_taskq, benchmark_raidz,
+-	    NULL, TQ_SLEEP);
+-	if (id != TASKQID_INVALID) {
+-		taskq_wait_id(system_taskq, id);
+-	} else {
+-		benchmark_raidz(NULL);
+-	}
++	/* Determine the fastest available implementation. */
++	benchmark_raidz();
+ 
++#if defined(_KERNEL)
+ 	/* Install kstats for all implementations */
+ 	raidz_math_kstat = kstat_create("zfs", 0, "vdev_raidz_bench", "misc",
+ 	    KSTAT_TYPE_RAW, 0, KSTAT_FLAG_VIRTUAL);
+@@ -541,8 +531,6 @@ vdev_raidz_math_init(void)
+ 		    raidz_math_kstat_addr);
+ 		kstat_install(raidz_math_kstat);
+ 	}
+-#else
+-	benchmark_raidz(NULL);
+ #endif
+ 
+ 	/* Finish initialization */
