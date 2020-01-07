@@ -41,21 +41,11 @@
 
 #include <sys/types.h>
 
-#if defined(_KERNEL)
 #include <asm/neon.h>
 #define	kfpu_allowed()		1
 #define	kfpu_initialize(tsk)	do {} while (0)
 #define	kfpu_begin()		kernel_neon_begin()
 #define	kfpu_end()		kernel_neon_end()
-#else
-/*
- * fpu dummy methods for userspace
- */
-#define	kfpu_allowed()		1
-#define	kfpu_initialize(tsk)	do {} while (0)
-#define	kfpu_begin()		do {} while (0)
-#define	kfpu_end()		do {} while (0)
-#endif /* defined(_KERNEL) */
 
 #endif /* __aarch64__ */
 

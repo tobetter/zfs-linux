@@ -22,10 +22,10 @@
 #include <sys/dmu_objset.h>
 #include <sys/dnode.h>
 #include <sys/fs/zfs.h>
+#include <sys/simd.h>
 #include <sys/zio.h>
 #include <sys/zil.h>
 #include <sys/sha2.h>
-#include <linux/simd.h>
 #include <sys/spa_impl.h>
 #include <sys/hkdf.h>
 #include "qat.h"

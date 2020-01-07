@@ -137,10 +137,10 @@
 #include <sys/sysmacros.h>
 #include <sys/byteorder.h>
 #include <sys/spa.h>
+#include <sys/simd.h>
 #include <sys/zio_checksum.h>
 #include <sys/zfs_context.h>
 #include <zfs_fletcher.h>
-#include <linux/simd.h>
 
 #define	FLETCHER_MIN_SIMD_SIZE	64
 
