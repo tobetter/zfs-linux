@@ -1,3 +1,15 @@
+zfs-linux (0.8.3-1ubuntu1) focal; urgency=medium
+
+  * Sync with debian 0.8.3-1
+  * Ubuntu specific changes:
+    - drop dkms tests in debian/tests/control
+    - Add lib/systemd/system/zfs-load-module.service to debian/zfsutils-linux.install
+    - debian/control*: Drop all zfs-modules deps, as our 64-bit kernels all
+      provide the modules, and we already didn't depend on them on 32-bit.
+    - Restrict zfs-modules deps to 64-bit arches only to avoid zfs-dkms in main.
+
+ -- Colin Ian King <colin.king@canonical.com>  Wed, 29 Jan 2020 10:12:11 +0000
+
 zfs-linux (0.8.3-1) unstable; urgency=medium
 
   * New upstream version 0.8.3
