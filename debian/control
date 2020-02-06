@@ -209,8 +209,7 @@ Recommends: lsb-base, zfs-zed
 Breaks: openrc,
         spl (<< 0.7.9-2),
         spl-dkms (<< 0.8.0~rc1),
-        zfs-dkms (<< ${binary:Version}),
-        zfs-dkms (>> ${binary:Version})
+        zfs-dkms (<< 0.7.9-2)
 Replaces: spl (<< 0.7.9-2), spl-dkms
 Suggests: nfs-kernel-server,
           samba-common-bin (>= 3.0.23),
