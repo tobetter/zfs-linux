@@ -1,3 +1,11 @@
+zfs-linux (0.8.3-1ubuntu3) focal; urgency=medium
+
+  * Relax zfsutils-linux Breaks on zfs-dksm (LP: #1862101)
+    - we're a bit more flexible than the current breaks rule, so relax
+      it
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 6 Feb 2020 08:51:22 +0000
+
 zfs-linux (0.8.3-1ubuntu2) focal; urgency=medium
 
   * Remove 4703-Enable-SIMD-for-encryption.patch
