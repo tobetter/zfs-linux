@@ -1,3 +1,12 @@
+zfs-linux (0.8.3-1ubuntu4) focal; urgency=medium
+
+  * debian/patches/4000-zsys-support.patch:
+    - use new zsysd command instead of eoan-based zsys
+  * debian/patches/4500-fix-generator-invalid-cache.patch:
+    - refresh
+
+ -- Didier Roche <didrocks@ubuntu.com>  Tue, 25 Feb 2020 17:02:07 +0100
+
 zfs-linux (0.8.3-1ubuntu3) focal; urgency=medium
 
   * Relax zfsutils-linux Breaks on zfs-dksm (LP: #1862101)
