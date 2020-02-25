@@ -258,7 +258,7 @@ EOF
   ln -s "../${mountfile}" "${req_dir}"
 }
 
-ZSYS="@sbindir@/zsys"
+ZSYS="@sbindir@/zsysd"
 ZFS="@sbindir@/zfs"
 ZPOOL="@sbindir@/zpool"
 initial_pools=""
@@ -296,7 +296,7 @@ initzsys() {
   initial_pools="$(${ZPOOL} list | awk '{if (NR>1) print $1}')"
   ${ZPOOL} import -f -a -N -o cachefile=none 2>/dev/null
   all_pools="$(zpool list | awk '{if (NR>1) print $1}')"
-  ${ZSYS} boot prepare
+  ${ZSYS} boot-prepare
 
   for cachefile in "${FSLIST}/"* ; do
     pool=`basename $cachefile`
