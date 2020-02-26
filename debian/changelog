@@ -1,3 +1,11 @@
+zfs-linux (0.8.3-1ubuntu5) focal; urgency=medium
+
+  * debian/patches/4000-zsys-support.patch:
+    Handle special syntax on zsys autosnapshot, while still being compatible
+    with manually snapshots taken by users.
+
+ -- Didier Roche <didrocks@ubuntu.com>  Wed, 26 Feb 2020 14:50:05 +0100
+
 zfs-linux (0.8.3-1ubuntu4) focal; urgency=medium
 
   * debian/patches/4000-zsys-support.patch:

@@ -71,6 +71,20 @@ get_fs_value()
 	"${ZFS}" get -H -ovalue $value "$fs" 2> /dev/null
 }
 
+# Get a ZFS filesystem property value with the source stripped from the value
+get_fs_value_without_source()
+{
+	value="$(get_fs_value $@)"
+	echo "${value%%:*}"
+}
+
+# Get a ZFS filesystem property source for a given key
+get_fs_source()
+{
+	value="$(get_fs_value $@)"
+	echo "${value#*:}"
+}
+
 # Find the 'bootfs' property on pool $1.
 # If the property does not contain '/', then ignore this
 # pool by exporting it again.
@@ -499,9 +513,13 @@ clone_snap()
 
 	[ "$quiet" != "y" ] && zfs_log_begin_msg "Cloning '$snap' to '$destfs'"
 
+	if [ -n "${mountpoint}" ]; then
+		additional_parameters="${additional_parameters} -o mountpoint=${mountpoint}"
+	fi
+
 	# Clone the snapshot into a dataset we can boot from
 	ZFS_CMD="${ZFS} clone"
-	ZFS_CMD="${ZFS_CMD} -o canmount=noauto -o mountpoint=${mountpoint} ${additional_parameters}"
+	ZFS_CMD="${ZFS_CMD} -o canmount=noauto ${additional_parameters}"
 	ZFS_CMD="${ZFS_CMD} $snap $destfs"
 	ZFS_STDERR="$(${ZFS_CMD} 2>&1)"
 	ZFS_ERROR="$?"
@@ -615,7 +633,7 @@ setup_snapshot_booting()
 
 	# Detect if we are on a zsys system, which will generates an unique UUID
 	# and override ZFS_BOOTFS
-	use_zsys=$(get_fs_value "${rootfs}" com.ubuntu.zsys:bootfs)
+	use_zsys=$(get_fs_value_without_source "${rootfs}" com.ubuntu.zsys:bootfs)
 	if [ "$use_zsys" = "yes" ]; then
 		zsys_uid=`uid`
 		ZFS_BOOTFS="${rootfs%_*}_${zsys_uid}" # we strip old uid and add new one
@@ -699,8 +717,13 @@ setup_snapshot_booting()
 				clone_additional_parameters="-o org.zol:mountpoint=${mountpoint}"
 				mountpoint=none
 			else
-				[ "$(get_fs_value "$s" com.ubuntu.zsys:bootfs)" != "yes" ] && continue
+				[ "$(get_fs_value_without_source "$s" com.ubuntu.zsys:bootfs)" != "yes" ] && continue
 				clone_additional_parameters="-o com.ubuntu.zsys:bootfs=yes"
+				# Only set mountpoint explicitely if it was locally set
+				# Keep the possibility to have mountpoint inherited for manual zfs snapshots without zsys involved, which
+				# will have an empty user propertie
+				local mountpoint_source="$(get_fs_source "$s" com.ubuntu.zsys:mountpoint)"
+				[ -n "${mountpoint_source}" -a "${mountpoint_source}" != "local" ] && mountpoint=""
 			fi
 
 			# Clone the snapshot into its own
@@ -1013,10 +1036,10 @@ mountroot()
 	# Some datasets under ROOT/ can be mounted on top of persistent datasets
 	# that are hosted elsewhere in the pool. Those are thus only mounted at
 	# early boot.
-	use_zsys=$(get_fs_value "${ZFS_BOOTFS}" com.ubuntu.zsys:bootfs)
+	use_zsys=$(get_fs_value_without_source "${ZFS_BOOTFS}" com.ubuntu.zsys:bootfs)
 	for fs in $filesystems $ZFS_INITRD_ADDITIONAL_DATASETS
 	do
-		[ "$use_zsys" = "yes" -a "$(get_fs_value "$fs" com.ubuntu.zsys:bootfs)" != "yes" ] && continue
+		[ "$use_zsys" = "yes" -a "$(get_fs_value_without_source "$fs" com.ubuntu.zsys:bootfs)" != "yes" ] && continue
 		mount_fs "$fs"
 	done
 
