@@ -215,6 +215,7 @@ dmu_zfetch(zfetch_t *zf, uint64_t blkid, uint64_t nblks, boolean_t fetch_data)
 	int epbs, max_dist_blks, pf_nblks, ipf_nblks, i;
 	uint64_t end_of_access_blkid;
 	end_of_access_blkid = blkid + nblks;
+	krw_t rw = RW_READER;
 
 	if (zfs_prefetch_disable)
 		return;
@@ -226,7 +227,8 @@ dmu_zfetch(zfetch_t *zf, uint64_t blkid, uint64_t nblks, boolean_t fetch_data)
 	if (blkid == 0)
 		return;
 
-	rw_enter(&zf->zf_rwlock, RW_READER);
+retry:
+	rw_enter(&zf->zf_rwlock, rw);
 
 	/*
 	 * Find matching prefetch stream.  Depending on whether the accesses
@@ -264,8 +266,12 @@ dmu_zfetch(zfetch_t *zf, uint64_t blkid, uint64_t nblks, boolean_t fetch_data)
 		 * a new stream for it.
 		 */
 		ZFETCHSTAT_BUMP(zfetchstat_misses);
-		if (rw_tryupgrade(&zf->zf_rwlock))
-			dmu_zfetch_stream_create(zf, end_of_access_blkid);
+		if (rw == RW_READER && !rw_tryupgrade(&zf->zf_rwlock)) {
+			rw_exit(&zf->zf_rwlock);
+			rw = RW_WRITER;
+			goto retry;
+		}
+		dmu_zfetch_stream_create(zf, end_of_access_blkid);
 		rw_exit(&zf->zf_rwlock);
 		return;
 	}
