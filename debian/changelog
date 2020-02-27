@@ -1,3 +1,18 @@
+zfs-linux (0.7.5-1ubuntu16.9) bionic; urgency=medium
+
+  * Fix scan rate reporting statistics (LP: #1860182)
+    - 3322-add-scrub-compat-fixes.patch
+    - 2200-add-zfs-0.6.x-ioctl-compat-shim.patch (refreshed)
+    Use the zfs 8.x pool_scan_stat_t extra fields to calculate
+    the scan progress when using zfs 8.x kernel drivers. For
+    0.7.5 we can pass the larger 8.x port_scan_stat_t to 0.7.5
+    zfs w/o problems and ignore these new fields and continue
+    to use the 0.7.5 rate calculations.
+    Refresh the ioctl compat shim to export the zfs module
+    version for the scrub version check.
+
+ -- Colin Ian King <colin.king@canonical.com>  Thu, 27 Feb 2020 17:09:12 +0000
+
 zfs-linux (0.7.5-1ubuntu16.8) bionic; urgency=medium
 
   * Backport Linux compat fixes to allow ZFS to build
