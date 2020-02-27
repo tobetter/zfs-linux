@@ -34,6 +34,7 @@
 #include <sys/fs/zfs.h>
 #include <sys/zio.h>
 #include <sys/sunldi.h>
+#include <linux/vfs_compat.h>
 
 char *zfs_vdev_scheduler = VDEV_SCHEDULER;
 static void *zfs_vdev_holder = VDEV_HOLDER;
@@ -75,7 +76,7 @@ vdev_bdev_mode(int smode)
 	ASSERT3S(smode & (FREAD | FWRITE), !=, 0);
 
 	if ((smode & FREAD) && !(smode & FWRITE))
-		mode = MS_RDONLY;
+		mode = SB_RDONLY;
 
 	return (mode);
 }
