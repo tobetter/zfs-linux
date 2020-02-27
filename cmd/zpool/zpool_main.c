@@ -6021,16 +6021,22 @@ print_scan_status(pool_scan_stat_t *ps)
 		    ctime(&start));
 	}
 
-	examined = ps->pss_examined ? ps->pss_examined : 1;
-	total = ps->pss_to_examine;
-	fraction_done = (double)examined / total;
-
 	/* elapsed time for this pass */
 	elapsed = time(NULL) - ps->pss_pass_start;
 	elapsed -= ps->pss_pass_scrub_spent_paused;
 	elapsed = elapsed ? elapsed : 1;
-	pass_exam = ps->pss_pass_exam ? ps->pss_pass_exam : 1;
-	rate = pass_exam / elapsed;
+
+	total = ps->pss_to_examine;
+	if (libzfs_module_version() >= 800) {
+		examined = ps->pss_issued;
+		fraction_done = (double)examined / total;
+		rate = ps->pss_pass_issued / elapsed;
+	} else {
+		examined = ps->pss_examined ? ps->pss_examined : 1;
+		fraction_done = (double)examined / total;
+		pass_exam = ps->pss_pass_exam ? ps->pss_pass_exam : 1;
+		rate = pass_exam / elapsed;
+	}
 	rate = rate ? rate : 1;
 	mins_left = ((total - examined) / rate) / 60;
 	hours_left = mins_left / 60;
