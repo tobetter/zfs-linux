@@ -449,6 +449,7 @@ extern int zfs_ioctl(libzfs_handle_t *, int, struct zfs_cmd *);
 extern int zpool_get_physpath(zpool_handle_t *, char *, size_t);
 extern void zpool_explain_recover(libzfs_handle_t *, const char *, int,
     nvlist_t *);
+extern int libzfs_module_version(void);
 
 /*
  * Basic handle manipulations.  These functions do not create or destroy the

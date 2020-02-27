@@ -1,0 +1,57 @@
+Add scrub compat fixes for newer 0.8.x zfs kernel driver support
+
+Use the new zfs 8.x pool_scan_stat_t extra fields to calculate
+the scan progress when using zfs 8.x kernel drivers. 
+
+For 0.7.5 we can pass the larger 8.x port_scan_stat_t to 0.7.5
+zfs w/o problems and ignore these new fields and continue
+to use the 0.7.5 rate calculations.  This is a compat bodge.
+
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+
+Index: zfs-linux-0.7.5/include/sys/fs/zfs.h
+===================================================================
+--- zfs-linux-0.7.5.orig/include/sys/fs/zfs.h
++++ zfs-linux-0.7.5/include/sys/fs/zfs.h
+@@ -836,6 +836,8 @@ typedef struct pool_scan_stat {
+ 	uint64_t	pss_pass_scrub_pause; /* pause time of a scurb pass */
+ 	/* cumulative time scrub spent paused, needed for rate calculation */
+ 	uint64_t	pss_pass_scrub_spent_paused;
++	uint64_t	pss_pass_issued; /* issued bytes per scan pass */
++	uint64_t	pss_issued;	/* total bytes checked by scanner */
+ } pool_scan_stat_t;
+ 
+ typedef enum dsl_scan_state {
+Index: zfs-linux-0.7.5/cmd/zpool/zpool_main.c
+===================================================================
+--- zfs-linux-0.7.5.orig/cmd/zpool/zpool_main.c
++++ zfs-linux-0.7.5/cmd/zpool/zpool_main.c
+@@ -6021,16 +6021,22 @@ print_scan_status(pool_scan_stat_t *ps)
+ 		    ctime(&start));
+ 	}
+ 
+-	examined = ps->pss_examined ? ps->pss_examined : 1;
+-	total = ps->pss_to_examine;
+-	fraction_done = (double)examined / total;
+-
+ 	/* elapsed time for this pass */
+ 	elapsed = time(NULL) - ps->pss_pass_start;
+ 	elapsed -= ps->pss_pass_scrub_spent_paused;
+ 	elapsed = elapsed ? elapsed : 1;
+-	pass_exam = ps->pss_pass_exam ? ps->pss_pass_exam : 1;
+-	rate = pass_exam / elapsed;
++
++	total = ps->pss_to_examine;
++	if (libzfs_module_version() >= 800) {
++		examined = ps->pss_issued;
++		fraction_done = (double)examined / total;
++		rate = ps->pss_pass_issued / elapsed;
++	} else {
++		examined = ps->pss_examined ? ps->pss_examined : 1;
++		fraction_done = (double)examined / total;
++		pass_exam = ps->pss_pass_exam ? ps->pss_pass_exam : 1;
++		rate = pass_exam / elapsed;
++	}
+ 	rate = rate ? rate : 1;
+ 	mins_left = ((total - examined) / rate) / 60;
+ 	hours_left = mins_left / 60;

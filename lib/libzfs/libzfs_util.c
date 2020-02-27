@@ -50,12 +50,12 @@
 #include <libzfs.h>
 #include <libzfs_core.h>
 
-static int zfs_major_ver, zfs_minor_ver;
-
 #include "libzfs_impl.h"
 #include "zfs_prop.h"
 #include "zfeature_common.h"
 #include <zfs_fletcher.h>
+
+static int zfs_module_version;
 
 int
 libzfs_errno(libzfs_handle_t *hdl)
@@ -757,16 +757,30 @@ libzfs_module_loaded(const char *module)
 	strcpy(path + sizeof (path_prefix) - 1 + strlen(module), "/version");
 	fp = fopen(path, "r");
 	if (fp) {
-		if (fscanf(fp, "%d.%d", &zfs_major_ver, &zfs_minor_ver) != 2) {
-			zfs_major_ver = 0;
-			zfs_minor_ver = 0;
+		int zfs_major, zfs_minor, zfs_revision;
+
+		if (fscanf(fp, "%d.%d.%d", &zfs_major, &zfs_minor, &zfs_revision) != 3) {
+			zfs_revision = 0;
+
+			(void)rewind(fp);
+			if (fscanf(fp, "%d.%d", &zfs_major, &zfs_minor) != 2) {
+				zfs_major = 0;
+				zfs_minor = 0;
+			}
 		}
 		fclose(fp);
+
+		zfs_module_version = (zfs_major * 10000) + (zfs_minor * 100) + zfs_revision;
 	}
 
 	return (access(path, F_OK) == 0);
 }
 
+int
+libzfs_module_version(void)
+{
+	return zfs_module_version;
+}
 
 /*
  * Read lines from an open file descriptor and store them in an array of
@@ -1470,7 +1484,7 @@ zfs_ioctl(libzfs_handle_t *hdl, int request, zfs_cmd_t *zc)
 	zfs_cmd_V065_t zc_065;
 	int rc;
 
-	if ((zfs_major_ver * 100) + zfs_minor_ver >= 7)
+	if (libzfs_module_version() >= 700)
 		return (ioctl(hdl->libzfs_fd, request, zc));
 
 	memcpy(zc_065.zc_name, zc->zc_name, sizeof zc_065.zc_name);
