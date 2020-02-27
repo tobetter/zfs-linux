@@ -182,6 +182,7 @@ Requires:       fio
 Requires:       acl
 Requires:       sudo
 Requires:       sysstat
+Requires:       libaio
 Requires:       rng-tools
 AutoReqProv:    no
 
