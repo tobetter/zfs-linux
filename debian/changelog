@@ -1,3 +1,14 @@
+zfs-linux (0.8.3-1ubuntu6) focal; urgency=medium
+
+  * Add 5.6 compat fixes (LP: #1863136)
+    - Backport 4 upstream zfs fixes that allow zfs to build on Linux 5.6:
+    - 2c3a83701dd1 ("Linux 5.6 compat: time_t")
+    - 0dd73648532e ("Linux 5.6 compat: struct proc_ops")
+    - 795699a6cc28 ("Linux 5.6 compat: timestamp_truncate()")
+    - ff5587d65137 ("Linux 5.6 compat: ktime_get_raw_ts64()")
+
+ -- Colin Ian King <colin.king@canonical.com>  Fri, 28 Feb 2020 13:55:15 +0000
+
 zfs-linux (0.8.3-1ubuntu5) focal; urgency=medium
 
   * debian/patches/4000-zsys-support.patch:
