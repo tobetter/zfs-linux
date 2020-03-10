@@ -1,3 +1,11 @@
+zfs-linux (0.8.3-1ubuntu8) focal; urgency=medium
+
+  * Add 5.5 low-latency compat fixe (LP: #1866730)
+    - Apply backported upstream zfs fix for Linux 5.5 compat fix
+    - 2fcab8795c7c ("Linux 5.5 compat: blkg_tryget()")
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 10 Mar 2020 09:52:11 +0000
+
 zfs-linux (0.8.3-1ubuntu7) focal; urgency=medium
 
   * Start zfs-mount.service after zfs-load-module.service, and if zfs
