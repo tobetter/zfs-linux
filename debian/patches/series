@@ -12,6 +12,7 @@ enable-zed.patch
 force-verbose-rules.patch
 
 #unapplied/init-debian-openrc-workaround.patch # OpenRC users can apply this locally
+4550-Linux-5.5-compat-blkg_tryget.patch
 4600-Linux-5.6-compat-struct-proc_ops.patch
 4601-Linux-5.6-compat-timestamp_truncate.patch
 4602-Linux-5.6-compat-ktime_get_raw_ts64.patch
