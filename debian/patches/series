@@ -20,3 +20,4 @@ git_fix_mount_race.patch
 4601-zfs-encryptionroot-quote.patch
 3206-Break-out-of-zfs_zget-early-if-unlinked-znode.patch
 3207-Check-for-unlinked-znodes-after-igrab.patch
+4602-Fix-deadlock-in-zfs-rollback.patch

@@ -216,6 +216,7 @@ typedef struct znode {
 	boolean_t	z_is_mapped;	/* are we mmap'ed */
 	boolean_t	z_is_ctldir;	/* are we .zfs entry */
 	boolean_t	z_is_stale;	/* are we stale due to rollback? */
+	boolean_t	z_suspended;	/* extra ref from a suspend? */
 	struct inode	z_inode;	/* generic vfs inode */
 } znode_t;
 

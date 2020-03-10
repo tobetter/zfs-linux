@@ -1,0 +1,100 @@
+From e7a2fa70c3b0d8c8cee2b484038bb5623c7c1ea9 Mon Sep 17 00:00:00 2001
+From: Tom Caputi <tcaputi@datto.com>
+Date: Tue, 27 Aug 2019 12:55:51 -0400
+Subject: [PATCH] Fix deadlock in 'zfs rollback'
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+BugLink: https://bugs.launchpad.net/bugs/1847832
+
+Currently, the 'zfs rollback' code can end up deadlocked due to
+the way the kernel handles unreferenced inodes on a suspended fs.
+Essentially, the zfs_resume_fs() code path may cause zfs to spawn
+new threads as it reinstantiates the suspended fs's zil. When a
+new thread is spawned, the kernel may attempt to free memory for
+that thread by freeing some unreferenced inodes. If it happens to
+select inodes that are a a part of the suspended fs a deadlock
+will occur because freeing inodes requires holding the fs's
+z_teardown_inactive_lock which is still held from the suspend.
+
+This patch corrects this issue by adding an additional reference
+to all inodes that are still present when a suspend is initiated.
+This prevents them from being freed by the kernel for any reason.
+
+Reviewed-by: Alek Pinchuk <apinchuk@datto.com>
+Reviewed-by: Brian Behlendorf <behlendorf1@llnl.gov>
+Signed-off-by: Tom Caputi <tcaputi@datto.com>
+Closes #9203
+(backported from upstream commit e7a2fa70c3b0d8c8cee2b484038bb5623c7c1ea9)
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+---
+ include/sys/zfs_znode.h |  1 +
+ module/zfs/zfs_vfsops.c | 16 +++++++++++++++-
+ module/zfs/zfs_znode.c  |  1 +
+ 3 files changed, 17 insertions(+), 1 deletion(-)
+
+Index: zfs-linux-0.8.1/include/sys/zfs_znode.h
+===================================================================
+--- zfs-linux-0.8.1.orig/include/sys/zfs_znode.h
++++ zfs-linux-0.8.1/include/sys/zfs_znode.h
+@@ -216,6 +216,7 @@ typedef struct znode {
+ 	boolean_t	z_is_mapped;	/* are we mmap'ed */
+ 	boolean_t	z_is_ctldir;	/* are we .zfs entry */
+ 	boolean_t	z_is_stale;	/* are we stale due to rollback? */
++	boolean_t	z_suspended;	/* extra ref from a suspend? */
+ 	struct inode	z_inode;	/* generic vfs inode */
+ } znode_t;
+ 
+Index: zfs-linux-0.8.1/module/zfs/zfs_vfsops.c
+===================================================================
+--- zfs-linux-0.8.1.orig/module/zfs/zfs_vfsops.c
++++ zfs-linux-0.8.1/module/zfs/zfs_vfsops.c
+@@ -1736,7 +1736,12 @@ zfsvfs_teardown(zfsvfs_t *zfsvfs, boolea
+ 	 * will fail with EIO since we have z_teardown_lock for writer (only
+ 	 * relevant for forced unmount).
+ 	 *
+-	 * Release all holds on dbufs.
++	 * Release all holds on dbufs. We also grab an extra reference to all
++	 * the remaining inodes so that the kernel does not attempt to free
++	 * any inodes of a suspended fs. This can cause deadlocks since the
++	 * zfs_resume_fs() process may involve starting threads, which might
++	 * attempt to free unreferenced inodes to free up memory for the new
++	 * thread.
+ 	 */
+ 	if (!unmounting) {
+ 		mutex_enter(&zfsvfs->z_znodes_lock);
+@@ -1744,6 +1749,9 @@ zfsvfs_teardown(zfsvfs_t *zfsvfs, boolea
+ 		    zp = list_next(&zfsvfs->z_all_znodes, zp)) {
+ 			if (zp->z_sa_hdl)
+ 				zfs_znode_dmu_fini(zp);
++			if (igrab(ZTOI(zp)) != NULL)
++				zp->z_suspended = B_TRUE;
++
+ 		}
+ 		mutex_exit(&zfsvfs->z_znodes_lock);
+ 	}
+@@ -2192,6 +2200,12 @@ zfs_resume_fs(zfsvfs_t *zfsvfs, dsl_data
+ 			remove_inode_hash(ZTOI(zp));
+ 			zp->z_is_stale = B_TRUE;
+ 		}
++
++		/* see comment in zfs_suspend_fs() */
++		if (zp->z_suspended) {
++			zfs_iput_async(ZTOI(zp));
++			zp->z_suspended = B_FALSE;
++		}
+ 	}
+ 	mutex_exit(&zfsvfs->z_znodes_lock);
+ 
+Index: zfs-linux-0.8.1/module/zfs/zfs_znode.c
+===================================================================
+--- zfs-linux-0.8.1.orig/module/zfs/zfs_znode.c
++++ zfs-linux-0.8.1/module/zfs/zfs_znode.c
+@@ -551,6 +551,7 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_bu
+ 	zp->z_is_mapped = B_FALSE;
+ 	zp->z_is_ctldir = B_FALSE;
+ 	zp->z_is_stale = B_FALSE;
++	zp->z_suspended = B_FALSE;
+ 
+ 	zfs_znode_sa_init(zfsvfs, zp, db, obj_type, hdl);
+ 

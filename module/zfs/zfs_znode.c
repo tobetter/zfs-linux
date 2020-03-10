@@ -551,6 +551,7 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
 	zp->z_is_mapped = B_FALSE;
 	zp->z_is_ctldir = B_FALSE;
 	zp->z_is_stale = B_FALSE;
+	zp->z_suspended = B_FALSE;
 
 	zfs_znode_sa_init(zfsvfs, zp, db, obj_type, hdl);
 
