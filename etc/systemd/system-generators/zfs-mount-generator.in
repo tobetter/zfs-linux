@@ -278,6 +278,9 @@ on_exit() {
     done
 }
 
+PROPS="name,mountpoint,canmount,atime,relatime,devices,exec,readonly"
+PROPS="${PROPS},setuid,nbmand"
+
 # TODO: we should move that in its own script, and use a systemd service as a fallback.
 # We need to condition this on current vs previous dataset (across the whole system), so
 # in /boot.
@@ -299,9 +302,6 @@ initzsys() {
   all_pools="$(zpool list | awk '{if (NR>1) print $1}')"
   ${ZSYS} boot-prepare
 
-  PROPS="name,mountpoint,canmount,atime,relatime,devices,exec,readonly"
-  PROPS="${PROPS},setuid,nbmand"
-
   for cachefile in "${FSLIST}/"* ; do
     pool=`basename $cachefile`
     fs_pools="${fs_pools} ${pool}"
@@ -313,6 +313,17 @@ initzsys
 
 # Feed each line into process_line
 for cachefile in "${FSLIST}/"* ; do
+  # FIXME: we need to ensure that pools are imported because some pools, like 
+  # bpool, should be imported and mounted before /boot/grub (via fstab).
+  # For some reasons, the bpool isn't imported (not in cache).
+  pool=`basename ${cachefile}`
+  ${ZPOOL} import "${pool}" || true
+
+  # If the cache file is empty for a pool, reload it
+  if [ ! -s "${cachefile}" ]; then
+    ${ZFS} list -H -t filesystem -o $PROPS -r "${pool}" > "${cachefile}"
+  fi
+
   while read -r fs ; do
     process_line "${fs}"
   done < "${cachefile}"
