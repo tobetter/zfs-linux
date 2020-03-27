@@ -4,6 +4,8 @@ Description: Start zfs-mount.service after zfs-load-module.service, and if zfs
 Author: Dimitri John Ledkov <xnox@ubuntu.com>
 
 
+Index: zfs-linux-0.8.3/etc/systemd/system/zfs-mount.service.in
+===================================================================
 --- zfs-linux-0.8.3.orig/etc/systemd/system/zfs-mount.service.in
 +++ zfs-linux-0.8.3/etc/systemd/system/zfs-mount.service.in
 @@ -7,6 +7,8 @@ After=zfs-import.target
