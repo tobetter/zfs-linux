@@ -180,7 +180,7 @@ Index: zfs-linux-0.8.3/etc/systemd/system-generators/zfs-mount-generator.in
  do_fail() {
    printf 'zfs-mount-generator: %s\n' "$*" > /dev/kmsg
    exit 1
-@@ -256,6 +258,55 @@ EOF
+@@ -256,6 +258,59 @@ EOF
    ln -s "../${mountfile}" "${req_dir}"
  }
  
@@ -217,7 +217,11 @@ Index: zfs-linux-0.8.3/etc/systemd/system-generators/zfs-mount-generator.in
 +
 +  # import and list pools for zsys
 +  initial_pools="$(${ZPOOL} list | awk '{if (NR>1) print $1}')"
++  ## WORKAROUND upstream bug https://github.com/openzfs/zfs/issues/10160:
++  # cache file is updated unconditionnally when detecting pools on disk.
++  cp -a /etc/zfs/zpool.cache /etc/zfs/zpool.cache.zsys || true
 +  ${ZPOOL} import -f -a -N -o cachefile=none 2>/dev/null
++  mv /etc/zfs/zpool.cache.zsys /etc/zfs/zpool.cache || true
 +  all_pools="$(zpool list | awk '{if (NR>1) print $1}')"
 +  ${ZSYS} boot-prepare
 +
