@@ -8,7 +8,6 @@ enable-zed.patch
 3100-remove-libzfs-module-timeout.patch
 3302-Use-obj-m-instead-of-subdir-m.patch
 4000-zsys-support.patch
-4500-fix-generator-invalid-cache.patch
 force-verbose-rules.patch
 
 #unapplied/init-debian-openrc-workaround.patch # OpenRC users can apply this locally
