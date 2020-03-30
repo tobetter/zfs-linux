@@ -1,3 +1,23 @@
+zfs-linux (0.8.3-1ubuntu10) focal; urgency=medium
+
+  [ Jean-Baptiste Lallement ]
+  [ Didier Roche ]
+  * Make debian/patches/4000-zsys-support.patch more robust in case of
+    corruption and faster:
+    - Don’t call out zsys if the system hasn’t changed compared to its cache.
+      This drastically speed up boot by some seconds.
+    - Drop into emergency mode with some error message in dmesg with the
+      failing command output in case some errors happen during revert.
+      Prevents thus booting which would have screwed over root partition by
+      creating a /boot non empty directory (like /boot/grub) in mounting over.
+      Let now user still boot without reverting to be able to fix the issue.
+    - Base what we import on cache file so that in the future (once grub is
+      fixed) booting with multiple rpool and bpool. (LP: #1867007)
+  * debian/patches/4500-fix-generator-invalid-cache.patch:
+    - Removed, not needed anymore with previous patch enhancement.
+
+ -- Didier Roche <didrocks@ubuntu.com>  Mon, 30 Mar 2020 17:05:32 +0200
+
 zfs-linux (0.8.3-1ubuntu9) focal; urgency=medium
 
   * debian/patches/4000-zsys-support.patch:
