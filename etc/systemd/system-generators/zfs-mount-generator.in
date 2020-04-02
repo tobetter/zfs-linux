@@ -280,7 +280,7 @@ drop_emergency_on_failure() {
 
 # Handle revert so that zsys prepares all datasets as expected.
 initzsys() {
-  if [ ! -x "${ZSYS}" ]; then
+  if [ ! -x @sbindir@/zsysd ]; then
     return
   fi
 
