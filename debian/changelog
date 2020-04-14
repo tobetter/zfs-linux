@@ -1,3 +1,13 @@
+zfs-linux (0.8.3-1ubuntu12) focal; urgency=medium
+
+  [ Jean-Baptiste Lallement ]
+  [ Didier Roche ]
+  * debian/patches/4100-disable-bpool-upgrade.patch:
+    - On ubuntu, upgrade of bpool is disabled to prevent users to break their
+      system by upgrading to features not supported by GRUB. (LP: #1847389)
+
+ -- Jean-Baptiste Lallement <jean-baptiste.lallement@ubuntu.com>  Tue, 14 Apr 2020 11:14:33 +0200
+
 zfs-linux (0.8.3-1ubuntu11) focal; urgency=medium
 
   * Fix generator not detecting zsys on boot, messing up ZFS datasets on first
