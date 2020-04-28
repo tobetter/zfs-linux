@@ -1,4 +1,4 @@
-#!@SHELL@
+#!/bin/sh
 #
 # zfs-import    This script will import ZFS pools
 #
@@ -308,8 +308,6 @@ do_start()
 
 # ----------------------------------------------------
 
-if [ ! -e /sbin/openrc-run ]
-then
 	case "$1" in
 		start)
 			do_start
@@ -331,9 +329,3 @@ then
 	esac
 
 	exit $?
-else
-	# Create wrapper functions since Gentoo don't use the case part.
-	depend() { do_depend; }
-	start() { do_start; }
-	status() { do_status; }
-fi
