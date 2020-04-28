@@ -10,3 +10,5 @@ enable-zed.patch
 2000-increase-default-zcmd-allocation-to-256K.patch
 init-debian-openrc-workaround.patch
 e22bfd814960295029ca41c8e116e8d516d3e730.patch
+98bb45e27ae80145a6ce028df90fccdb23f8901d.patch
+01937958ce85b1cd8942dbaf9a3f9768c5b02a0a.patch

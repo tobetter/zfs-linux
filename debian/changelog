@@ -1,3 +1,12 @@
+zfs-linux (0.7.12-2+deb10u2) buster; urgency=medium
+
+  * Cherry-pick two upstream patches to fix potential deadlock issues.
+    + 01937958ce85b1cd8942dbaf9a3f9768c5b02a0a
+    + 98bb45e27ae80145a6ce028df90fccdb23f8901d
+  * Let zfs-dkms pre-depends on spl-dkms (>= 0.7.12-2+deb10u1).
+
+ -- Mo Zhou <lumin@debian.org>  Tue, 28 Apr 2020 15:08:05 +0800
+
 zfs-linux (0.7.12-2+deb10u1) testing-proposed-updates; urgency=high
 
   * Patch: Disable SIMD on 4.19.37+ or 5.0+ kernels. (Closes: #929929)
