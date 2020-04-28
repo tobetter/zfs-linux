@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #
 # Print out ZFS ARC Statistics exported via kstat(1)
 # For a definition of fields, or usage, use arctstat.pl -v
