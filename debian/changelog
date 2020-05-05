@@ -1,3 +1,14 @@
+zfs-linux (0.8.3-1ubuntu13) groovy; urgency=medium
+
+  * Backport AES-GCM performance accelleration
+   - backport of upstream zfs commit 31b160f0a6c673c8f926233af2ed6d5354808393
+     ("ICP: Improve AES-GCM performance"). 
+     tests on a memory backed pool show performance improvements of ~15-22%
+     for AES-CCM writes, ~17-20% AES-CCM reads, 34-36% AES-GCM writes and
+     ~79-80% AES-GCM reads.
+
+ -- Colin Ian King <colin.king@canonical.com>  Tue, 5 May 2020 15:53:12 +0100
+
 zfs-linux (0.8.3-1ubuntu12) focal; urgency=medium
 
   [ Jean-Baptiste Lallement ]
