@@ -71,7 +71,6 @@ AC_DEFUN([ZFS_AC_KERNEL_TEST_SRC], [
 	ZFS_AC_KERNEL_SRC_BIO_BI_STATUS
 	ZFS_AC_KERNEL_SRC_BIO_RW_BARRIER
 	ZFS_AC_KERNEL_SRC_BIO_RW_DISCARD
-	ZFS_AC_KERNEL_SRC_BLKG_TRYGET
 	ZFS_AC_KERNEL_SRC_BLK_QUEUE_BDI
 	ZFS_AC_KERNEL_SRC_BLK_QUEUE_DISCARD
 	ZFS_AC_KERNEL_SRC_BLK_QUEUE_SECURE_ERASE
@@ -80,6 +79,7 @@ AC_DEFUN([ZFS_AC_KERNEL_TEST_SRC], [
 	ZFS_AC_KERNEL_SRC_BLK_QUEUE_MAX_HW_SECTORS
 	ZFS_AC_KERNEL_SRC_BLK_QUEUE_MAX_SEGMENTS
 	ZFS_AC_KERNEL_SRC_BLK_QUEUE_PLUG
+	ZFS_AC_KERNEL_SRC_BLKG_TRYGET
 	ZFS_AC_KERNEL_SRC_GET_DISK_AND_MODULE
 	ZFS_AC_KERNEL_SRC_GET_DISK_RO
 	ZFS_AC_KERNEL_SRC_GENERIC_READLINK_GLOBAL
@@ -813,11 +813,20 @@ dnl # $2 - source
 dnl # $3 - run on success (valid .ko generated)
 dnl # $4 - run on failure (unable to compile)
 dnl #
+dnl # When configuring as builtin (--enable-linux-builtin) for kernels
+dnl # without loadable module support (CONFIG_MODULES=n) only the object
+dnl # file is created.  See ZFS_LINUX_TEST_COMPILE_ALL for details.
+dnl #
 AC_DEFUN([ZFS_LINUX_TRY_COMPILE], [
-	ZFS_LINUX_COMPILE_IFELSE(
-	    [ZFS_LINUX_TEST_PROGRAM([[$1]], [[$2]])],
-	    [test -f build/conftest/conftest.ko],
-	    [$3], [$4])
+	AS_IF([test "x$enable_linux_builtin" = "xyes"], [
+		ZFS_LINUX_COMPILE_IFELSE(
+		    [ZFS_LINUX_TEST_PROGRAM([[$1]], [[$2]])],
+		    [test -f build/conftest/conftest.o], [$3], [$4])
+	], [
+		ZFS_LINUX_COMPILE_IFELSE(
+		    [ZFS_LINUX_TEST_PROGRAM([[$1]], [[$2]])],
+		    [test -f build/conftest/conftest.ko], [$3], [$4])
+	])
 ])
 
 dnl #
