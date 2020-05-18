@@ -113,6 +113,13 @@ static struct ida zvol_ida;
 /*
  * The in-core state of each volume.
  */
+struct zvol_state_os {
+	struct gendisk		*zvo_disk;	/* generic disk */
+	struct request_queue	*zvo_queue;	/* request queue */
+	dataset_kstats_t	zvo_kstat;	/* zvol kstats */
+	dev_t			zvo_dev;	/* device id */
+};
+
 struct zvol_state {
 	char			zv_name[MAXNAMELEN];	/* name */
 	uint64_t		zv_volsize;		/* advertised space */
@@ -134,6 +141,7 @@ struct zvol_state {
 	kmutex_t		zv_state_lock;	/* protects zvol_state_t */
 	atomic_t		zv_suspend_ref;	/* refcount for suspend */
 	krwlock_t		zv_suspend_lock;	/* suspend lock */
+	struct zvol_state_os	*zv_zso;	/* private platform state */
 };
 
 typedef enum {
@@ -1686,6 +1694,7 @@ static zvol_state_t *
 zvol_alloc(dev_t dev, const char *name)
 {
 	zvol_state_t *zv;
+	struct zvol_state_os *zso;
 	uint64_t volmode;
 
 	if (dsl_prop_get_integer(name, "volmode", &volmode, NULL) != 0)
@@ -1698,39 +1707,39 @@ zvol_alloc(dev_t dev, const char *name)
 		return (NULL);
 
 	zv = kmem_zalloc(sizeof (zvol_state_t), KM_SLEEP);
+	zso = kmem_zalloc(sizeof (struct zvol_state_os), KM_SLEEP);
+	zv->zv_zso = zso;
 
 	list_link_init(&zv->zv_next);
-
 	mutex_init(&zv->zv_state_lock, NULL, MUTEX_DEFAULT, NULL);
 
-	zv->zv_queue = blk_alloc_queue(GFP_ATOMIC);
-	if (zv->zv_queue == NULL)
+	zso->zvo_queue = blk_generic_alloc_queue(zvol_request, NUMA_NO_NODE);
+	if (zso->zvo_queue == NULL)
 		goto out_kmem;
 
-	blk_queue_make_request(zv->zv_queue, zvol_request);
-	blk_queue_set_write_cache(zv->zv_queue, B_TRUE, B_TRUE);
+	blk_queue_set_write_cache(zso->zvo_queue, B_TRUE, B_TRUE);
 
 	/* Limit read-ahead to a single page to prevent over-prefetching. */
-	blk_queue_set_read_ahead(zv->zv_queue, 1);
+	blk_queue_set_read_ahead(zso->zvo_queue, 1);
 
 	/* Disable write merging in favor of the ZIO pipeline. */
-	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, zv->zv_queue);
+	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, zso->zvo_queue);
 
-	zv->zv_disk = alloc_disk(ZVOL_MINORS);
-	if (zv->zv_disk == NULL)
+	zso->zvo_disk = alloc_disk(ZVOL_MINORS);
+	if (zso->zvo_disk == NULL)
 		goto out_queue;
 
-	zv->zv_queue->queuedata = zv;
-	zv->zv_dev = dev;
+	zso->zvo_queue->queuedata = zv;
+	zso->zvo_dev = dev;
 	zv->zv_open_count = 0;
 	strlcpy(zv->zv_name, name, MAXNAMELEN);
 
 	zfs_rangelock_init(&zv->zv_rangelock, NULL, NULL);
 	rw_init(&zv->zv_suspend_lock, NULL, RW_DEFAULT, NULL);
 
-	zv->zv_disk->major = zvol_major;
+	zso->zvo_disk->major = zvol_major;
 #ifdef HAVE_BLOCK_DEVICE_OPERATIONS_CHECK_EVENTS
-	zv->zv_disk->events = DISK_EVENT_MEDIA_CHANGE;
+	zso->zvo_disk->events = DISK_EVENT_MEDIA_CHANGE;
 #endif
 
 	if (volmode == ZFS_VOLMODE_DEV) {
@@ -1741,26 +1750,27 @@ zvol_alloc(dev_t dev, const char *name)
 		 * and suppresses partition scanning (GENHD_FL_NO_PART_SCAN)
 		 * setting gendisk->flags accordingly.
 		 */
-		zv->zv_disk->minors = 1;
+		zso->zvo_disk->minors = 1;
 #if defined(GENHD_FL_EXT_DEVT)
-		zv->zv_disk->flags &= ~GENHD_FL_EXT_DEVT;
+		zso->zvo_disk->flags &= ~GENHD_FL_EXT_DEVT;
 #endif
 #if defined(GENHD_FL_NO_PART_SCAN)
-		zv->zv_disk->flags |= GENHD_FL_NO_PART_SCAN;
+		zso->zvo_disk->flags |= GENHD_FL_NO_PART_SCAN;
 #endif
 	}
-	zv->zv_disk->first_minor = (dev & MINORMASK);
-	zv->zv_disk->fops = &zvol_ops;
-	zv->zv_disk->private_data = zv;
-	zv->zv_disk->queue = zv->zv_queue;
-	snprintf(zv->zv_disk->disk_name, DISK_NAME_LEN, "%s%d",
+	zso->zvo_disk->first_minor = (dev & MINORMASK);
+	zso->zvo_disk->fops = &zvol_ops;
+	zso->zvo_disk->private_data = zv;
+	zso->zvo_disk->queue = zso->zvo_queue;
+	snprintf(zso->zvo_disk->disk_name, DISK_NAME_LEN, "%s%d",
 	    ZVOL_DEV_NAME, (dev & MINORMASK));
 
 	return (zv);
 
 out_queue:
-	blk_cleanup_queue(zv->zv_queue);
+	blk_cleanup_queue(zso->zvo_queue);
 out_kmem:
+	kmem_free(zso, sizeof (struct zvol_state_os));
 	kmem_free(zv, sizeof (zvol_state_t));
 
 	return (NULL);
