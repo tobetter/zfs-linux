@@ -17,5 +17,6 @@ force-verbose-rules.patch
 4601-Linux-5.6-compat-timestamp_truncate.patch
 4602-Linux-5.6-compat-ktime_get_raw_ts64.patch
 4603-Linux-5.6-compat-time_t.patch
+4604-Linux-5.7-compat-blk_alloc_queue.patch
 zfs-mount-container-start.patch
 4610-ICP-Improve-AES-GCM-performance.patch

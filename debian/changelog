@@ -1,3 +1,11 @@
+zfs-linux (0.8.3-1ubuntu14) groovy; urgency=medium
+
+  * Backport 5.7 compat changes (LP: #1872373)
+   - backport of upstream commit 68dde63d138882860109178f4ab0b7b1b1bb3cfd
+     ("Linux 5.7 compat: blk_alloc_queue()")
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 18 May 2020 16:13:22 +0100
+
 zfs-linux (0.8.3-1ubuntu13) groovy; urgency=medium
 
   * Backport AES-GCM performance accelleration
