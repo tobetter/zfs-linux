@@ -1,7 +1,8 @@
 Source: zfs-linux
 Section: contrib/kernel
 Priority: optional
-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@alioth-lists.debian.net>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Debian ZFS on Linux maintainers <pkg-zfsonlinux-devel@alioth-lists.debian.net>
 Uploaders: Aron Xu <aron@debian.org>,
            Petter Reinholdtsen <pere@debian.org>,
            Carlos Alberto Lopez Perez <clopez@igalia.com>,
@@ -166,10 +167,9 @@ Description: OpenZFS filesystem kernel modules for Linux
  OpenZFS.
 
 Package: zfs-initramfs
-Architecture: all
+Architecture: amd64 arm64 ppc64el s390x
 Depends: busybox-initramfs | busybox-static | busybox,
          initramfs-tools,
-         zfs-modules | zfs-dkms,
          zfsutils-linux (>= ${binary:Version}),
          ${misc:Depends}
 Breaks: zfsutils-linux (<= 0.7.11-2)
@@ -185,7 +185,6 @@ Description: OpenZFS root filesystem capabilities for Linux - initramfs
 Package: zfs-dracut
 Architecture: all
 Depends: dracut,
-         zfs-modules | zfs-dkms,
          zfsutils-linux (>= ${binary:Version}),
          ${misc:Depends}
 Description: OpenZFS root filesystem capabilities for Linux - dracut
@@ -255,7 +254,6 @@ Depends: acl,
          python3-pyzfs,
          sudo,
          sysstat,
-         zfs-modules | zfs-dkms,
          zfsutils-linux (>=${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
