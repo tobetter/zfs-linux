@@ -7,10 +7,11 @@ dont-symlink-zed-scripts.patch
 enable-zed.patch
 1004-zed-service-bindir.patch
 2100-zfs-load-module.patch
-#2200-add-zfs-0.6.x-ioctl-compat-shim.patch
+2200-add-zfs-0.6.x-ioctl-compat-shim.patch
 3100-remove-libzfs-module-timeout.patch
-#3302-Use-obj-m-instead-of-subdir-m.patch
-#4000-zsys-support.patch
-#4500-fix-generator-invalid-cache.patch
+3302-Use-obj-m-instead-of-subdir-m.patch
+4000-zsys-support.patch
+4100-disable-bpool-upgrade.patch
+4500-fix-generator-invalid-cache.patch
 force-verbose-rules.patch
-#zfs-mount-container-start.patch
+zfs-mount-container-start.patch

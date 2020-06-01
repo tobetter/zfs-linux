@@ -1,3 +1,15 @@
+zfs-linux (0.8.4-1ubuntu1) groovy; urgency=medium
+
+  * Sync with debian 0.8.4-1
+  * Ubuntu specific changes:
+    - copy over 0.8.3 Ubuntu changes to 0.8.4
+    - drop debian tests in debian/tests/control
+    - wiggle zsys patches to apply cleanly:
+      4000-zsys-support.patch
+      4500-fix-generator-invalid-cache.patch
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 1 Jun 2020 10:20:51 +0100
+
 zfs-linux (0.8.4-1) unstable; urgency=medium
 
   [ Antonio Russo ]
