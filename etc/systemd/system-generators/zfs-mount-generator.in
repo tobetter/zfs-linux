@@ -29,6 +29,8 @@ FSLIST="@sysconfdir@/zfs/zfs-list.cache"
 
 [ -d "${FSLIST}" ] || exit 0
 
+OLD_IFS=$IFS
+
 do_fail() {
   printf 'zfs-mount-generator: %s\n' "$*" > /dev/kmsg
   exit 1
@@ -428,6 +430,55 @@ Options=defaults${opts},zfsutil" > "${dest_norm}/${mountfile}"
   create_dependencies "${mountfile}" "requires" "$requiredby"
 
 }
+
+ZSYS="@sbindir@/zsysd"
+ZFS="@sbindir@/zfs"
+ZPOOL="@sbindir@/zpool"
+initial_pools=""
+fs_pools=""
+all_pools=""
+on_exit() {
+    # Restore initial zpool import state
+    IFS=$OLD_IFS
+    for pool in ${all_pools}; do
+        if echo "${initial_pools}" | grep -wq "${pool}"; then
+            continue
+        fi
+        if echo "${fs_pools}" | grep -wq "${pool}"; then
+            continue
+        fi
+        zpool export "${pool}"
+    done
+}
+
+# TODO: we should move that in its own script, and use a systemd service as a fallback.
+# We need to condition this on current vs previous dataset (across the whole system), so
+# in /boot.
+# We will also recall the zedlet directly and regenerate the files if any changes were
+# made.
+initzsys() {
+  if [ ! -x "${ZSYS}" ]; then
+    return
+  fi
+  trap on_exit EXIT INT QUIT ABRT PIPE TERM
+
+  # import and list pools for zsys
+  initial_pools="$(${ZPOOL} list | awk '{if (NR>1) print $1}')"
+  ${ZPOOL} import -f -a -N -o cachefile=none 2>/dev/null
+  all_pools="$(zpool list | awk '{if (NR>1) print $1}')"
+  ${ZSYS} boot-prepare
+
+  PROPS="name,mountpoint,canmount,atime,relatime,devices,exec,readonly"
+  PROPS="${PROPS},setuid,nbmand"
+
+  for cachefile in "${FSLIST}/"* ; do
+    pool=`basename $cachefile`
+    fs_pools="${fs_pools} ${pool}"
+    ${ZFS} list -H -t filesystem -o $PROPS -r "${pool}" > "${cachefile}"
+  done
+}
+
+initzsys
 
 for cachefile in "${FSLIST}/"* ; do
   # Sort cachefile's lines by canmount, "on" before "noauto"
