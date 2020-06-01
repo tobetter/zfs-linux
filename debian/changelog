@@ -1,3 +1,10 @@
+zfs-linux (0.8.4-1ubuntu2) groovy; urgency=medium
+
+  * Remove zfs-dkms depedencies for Ubuntu as these are
+    built into the kernel
+
+ -- Colin Ian King <colin.king@canonical.com>  Mon, 1 Jun 2020 22:57:23 +0100
+
 zfs-linux (0.8.4-1ubuntu1) groovy; urgency=medium
 
   * Sync with debian 0.8.4-1
